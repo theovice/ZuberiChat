@@ -26,7 +26,7 @@ function buildConnectRequest(token: string): WebSocketMessage {
       minProtocol: 3,
       maxProtocol: 3,
       client: {
-        id: 'gateway-client',
+        id: 'openclaw-control-ui',
         displayName: 'Zuberi',
         version: '0.1.0',
         platform: 'windows',
