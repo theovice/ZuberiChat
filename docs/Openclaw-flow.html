@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OpenClaw Runtime Flow</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;700&family=Syne:wght@400;600;700;800&display=swap');
+
+  :root {
+    --bg: #0a0c10;
+    --surface: #0f1218;
+    --border: #1e2530;
+    --border-glow: #2a3545;
+    --text: #c9d4e0;
+    --text-dim: #5a6a7e;
+    --text-bright: #e8f0fa;
+    --user: #00d4aa;
+    --runtime: #3b82f6;
+    --llm: #a855f7;
+    --skill: #f59e0b;
+    --plugin: #10b981;
+    --mcp: #ef4444;
+    --arrow: #2a3a4f;
+    --arrow-active: #3b82f6;
+    --tag-bg: #0f1a2a;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    min-height: 100vh;
+    padding: 40px 20px 80px;
+  }
+
+  .header {
+    text-align: center;
+    margin-bottom: 60px;
+  }
+
+  .header h1 {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: clamp(1.8rem, 4vw, 2.8rem);
+    color: var(--text-bright);
+    letter-spacing: -0.02em;
+    margin-bottom: 8px;
+  }
+
+  .header .sub {
+    color: var(--text-dim);
+    font-size: 0.8rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .task-banner {
+    max-width: 820px;
+    margin: 0 auto 56px;
+    background: linear-gradient(135deg, #0d1a0f, #0a1520);
+    border: 1px solid #1a3a1a;
+    border-left: 3px solid var(--user);
+    border-radius: 8px;
+    padding: 20px 24px;
+  }
+
+  .task-label {
+    font-size: 0.65rem;
+    color: var(--user);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .task-text {
+    color: var(--text-bright);
+    font-size: 0.9rem;
+    line-height: 1.6;
+  }
+
+  .task-text strong {
+    color: var(--user);
+  }
+
+  /* MAIN DIAGRAM */
+  .diagram {
+    max-width: 1100px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  /* LAYER SECTIONS */
+  .layer {
+    position: relative;
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    gap: 0;
+    margin-bottom: 0;
+  }
+
+  .layer-label {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 24px;
+    padding-top: 32px;
+  }
+
+  .layer-tag {
+    font-size: 0.6rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border-radius: 3px;
+    border: 1px solid;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .layer-tag.interface { color: var(--user); border-color: var(--user); background: rgba(0,212,170,0.05); }
+  .layer-tag.runtime { color: var(--runtime); border-color: var(--runtime); background: rgba(59,130,246,0.05); }
+  .layer-tag.llm { color: var(--llm); border-color: var(--llm); background: rgba(168,85,247,0.05); }
+  .layer-tag.tools { color: var(--plugin); border-color: var(--plugin); background: rgba(16,185,129,0.05); }
+
+  .layer-body {
+    padding: 16px 0 16px 0;
+    position: relative;
+  }
+
+  /* ARROW CONNECTOR */
+  .arrow-row {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+  }
+
+  .arrow-spacer { }
+
+  .arrow-connector {
+    display: flex;
+    align-items: center;
+    padding: 0 0 0 32px;
+    height: 32px;
+    position: relative;
+  }
+
+  .arrow-connector::before {
+    content: '';
+    position: absolute;
+    left: 52px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: linear-gradient(to bottom, var(--border-glow), var(--border-glow));
+  }
+
+  .arrow-connector .arrow-label {
+    margin-left: 72px;
+    font-size: 0.65rem;
+    color: var(--text-dim);
+    letter-spacing: 0.05em;
+    font-style: italic;
+  }
+
+  .arrow-connector .arrow-tip {
+    position: absolute;
+    left: 44px;
+    bottom: -1px;
+    color: var(--border-glow);
+    font-size: 14px;
+    line-height: 1;
+  }
+
+  /* CARDS */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 24px;
+    margin-left: 32px;
+    position: relative;
+    transition: border-color 0.2s;
+  }
+
+  .card::before {
+    content: '';
+    position: absolute;
+    left: -32px;
+    top: 50%;
+    width: 32px;
+    height: 2px;
+    background: var(--border-glow);
+  }
+
+  .card:hover {
+    border-color: var(--border-glow);
+  }
+
+  .card-title {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 1rem;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .card-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .card-sub {
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    margin-bottom: 14px;
+    margin-left: 18px;
+  }
+
+  .card-items {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-left: 18px;
+  }
+
+  .card-item {
+    font-size: 0.75rem;
+    color: var(--text);
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    line-height: 1.5;
+  }
+
+  .card-item::before {
+    content: '→';
+    color: var(--text-dim);
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  /* TOOL EXECUTION SPECIAL LAYOUT */
+  .tool-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+    margin-top: 16px;
+    margin-left: 18px;
+  }
+
+  .tool-card {
+    border-radius: 8px;
+    padding: 14px 16px;
+    border: 1px solid;
+  }
+
+  .tool-card.skill-card {
+    border-color: rgba(245,158,11,0.3);
+    background: rgba(245,158,11,0.04);
+  }
+
+  .tool-card.plugin-card {
+    border-color: rgba(16,185,129,0.3);
+    background: rgba(16,185,129,0.04);
+  }
+
+  .tool-card.mcp-card {
+    border-color: rgba(239,68,68,0.3);
+    background: rgba(239,68,68,0.04);
+  }
+
+  .tool-card-title {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .tool-card-title .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .tool-role {
+    font-size: 0.65rem;
+    color: var(--text-dim);
+    margin-bottom: 10px;
+    line-height: 1.5;
+  }
+
+  .code-pill {
+    display: inline-block;
+    font-size: 0.65rem;
+    padding: 3px 8px;
+    border-radius: 4px;
+    margin: 2px 2px 2px 0;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .skill-pill { background: rgba(245,158,11,0.12); color: #fbbf24; border: 1px solid rgba(245,158,11,0.2); }
+  .plugin-pill { background: rgba(16,185,129,0.12); color: #34d399; border: 1px solid rgba(16,185,129,0.2); }
+  .mcp-pill { background: rgba(239,68,68,0.12); color: #f87171; border: 1px solid rgba(239,68,68,0.2); }
+
+  /* MICRO-LOOP */
+  .loop-section {
+    max-width: 1100px;
+    margin: 60px auto 0;
+  }
+
+  .loop-title {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 1rem;
+    color: var(--text-bright);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+    padding-left: 232px;
+  }
+
+  .loop-sub {
+    font-size: 0.68rem;
+    color: var(--text-dim);
+    margin-bottom: 24px;
+    padding-left: 232px;
+  }
+
+  .loop-steps {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+  }
+
+  .loop-body {
+    margin-left: 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .loop-step {
+    display: grid;
+    grid-template-columns: 28px 1fr;
+    gap: 16px;
+    align-items: start;
+    position: relative;
+  }
+
+  .loop-step:not(:last-child)::before {
+    content: '';
+    position: absolute;
+    left: 13px;
+    top: 28px;
+    bottom: -16px;
+    width: 2px;
+    background: var(--border);
+  }
+
+  .step-num {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.65rem;
+    font-weight: 700;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 1;
+  }
+
+  .step-llm { background: rgba(168,85,247,0.15); border: 1px solid rgba(168,85,247,0.4); color: #c084fc; }
+  .step-runtime { background: rgba(59,130,246,0.15); border: 1px solid rgba(59,130,246,0.4); color: #60a5fa; }
+  .step-done { background: rgba(0,212,170,0.15); border: 1px solid rgba(0,212,170,0.4); color: var(--user); }
+
+  .step-content {
+    padding: 4px 0 20px;
+  }
+
+  .step-actor {
+    font-size: 0.6rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+
+  .step-actor.llm { color: var(--llm); }
+  .step-actor.runtime { color: var(--runtime); }
+  .step-actor.done { color: var(--user); }
+
+  .step-desc {
+    font-size: 0.8rem;
+    color: var(--text);
+    line-height: 1.5;
+  }
+
+  .step-code {
+    display: inline-block;
+    background: #0d1520;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 6px 12px;
+    font-size: 0.72rem;
+    color: #93c5fd;
+    margin-top: 6px;
+    line-height: 1.5;
+  }
+
+  .step-result {
+    display: inline-block;
+    background: #0d1a12;
+    border: 1px solid rgba(16,185,129,0.2);
+    border-radius: 5px;
+    padding: 6px 12px;
+    font-size: 0.72rem;
+    color: #6ee7b7;
+    margin-top: 6px;
+    line-height: 1.5;
+  }
+
+  /* KEY */
+  .key-row {
+    max-width: 1100px;
+    margin: 48px auto 0;
+    display: flex;
+    gap: 24px;
+    padding-left: 232px;
+    flex-wrap: wrap;
+  }
+
+  .key-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.68rem;
+    color: var(--text-dim);
+  }
+
+  .key-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+  }
+
+  /* color-coded left border on cards */
+  .card.user-card { border-left: 3px solid var(--user); }
+  .card.runtime-card { border-left: 3px solid var(--runtime); }
+  .card.llm-card { border-left: 3px solid var(--llm); }
+  .card.tool-ex-card { border-left: 3px solid var(--plugin); }
+
+  @media (max-width: 700px) {
+    .layer { grid-template-columns: 80px 1fr; }
+    .arrow-row { grid-template-columns: 80px 1fr; }
+    .loop-steps { grid-template-columns: 80px 1fr; }
+    .layer-label { padding-right: 12px; }
+    .loop-title, .loop-sub, .key-row { padding-left: 96px; }
+    .tool-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>OpenClaw Runtime Flow</h1>
+  <div class="sub">How a task moves through ClawBot → Runtime → LLM → Tools → Response</div>
+</div>
+
+<!-- TASK BANNER -->
+<div class="task-banner">
+  <div class="task-label">Example Task Input</div>
+  <div class="task-text">
+    <strong>User → ClawBot:</strong> "Find any open P0 bugs for Project X, summarize them, and post the summary in #triage."
+  </div>
+</div>
+
+<div class="diagram">
+
+  <!-- ── LAYER 1: INTERFACE ───────────────────────────────── -->
+  <div class="layer">
+    <div class="layer-label">
+      <span class="layer-tag interface">Interface</span>
+    </div>
+    <div class="layer-body">
+      <div class="card user-card">
+        <div class="card-title">
+          <span class="card-dot" style="background:var(--user)"></span>
+          <span style="color:var(--user)">ClawBot</span>
+          <span style="color:var(--text-dim); font-size:0.7rem; font-weight:400">— chat surface</span>
+        </div>
+        <div class="card-sub">Where messages enter and results return. Not an agent — just the channel.</div>
+        <div class="card-items">
+          <div class="card-item">Receives raw user message from Telegram, Discord, Slack, or CLI</div>
+          <div class="card-item">Identifies user + session context (who is this, what project, what permissions)</div>
+          <div class="card-item">Hands task + context to the Runtime — its job ends here until the final answer comes back</div>
+          <div class="card-item">Posts final output back to the originating channel</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow-row">
+    <div class="arrow-spacer"></div>
+    <div class="arrow-connector">
+      <div class="arrow-tip">▼</div>
+      <span class="arrow-label">task + session context passed to Runtime</span>
+    </div>
+  </div>
+
+  <!-- ── LAYER 2: RUNTIME ─────────────────────────────────── -->
+  <div class="layer">
+    <div class="layer-label">
+      <span class="layer-tag runtime">Runtime</span>
+    </div>
+    <div class="layer-body">
+      <div class="card runtime-card">
+        <div class="card-title">
+          <span class="card-dot" style="background:var(--runtime)"></span>
+          <span style="color:var(--runtime)">OpenClaw Runtime</span>
+          <span style="color:var(--text-dim); font-size:0.7rem; font-weight:400">— the agent engine</span>
+        </div>
+        <div class="card-sub">The orchestration core. It does not think — it enables and enforces.</div>
+        <div class="card-items">
+          <div class="card-item">Loads the relevant <strong style="color:#fbbf24">Skills</strong> (playbooks / SOPs) for this task type</div>
+          <div class="card-item">Registers available <strong style="color:#34d399">Plugins</strong> (local tools) and <strong style="color:#f87171">MCP servers</strong> (remote tools)</div>
+          <div class="card-item">Applies the permission/allow-deny policy: what tools can run, with what scope</div>
+          <div class="card-item">Sends the full context (task + skills + available tools + policy) to the LLM</div>
+          <div class="card-item">Manages the loop: receives LLM tool-call requests → executes them → feeds results back → repeats until done</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow-row">
+    <div class="arrow-spacer"></div>
+    <div class="arrow-connector">
+      <div class="arrow-tip">▼</div>
+      <span class="arrow-label">task + skill guidance + allowed tools sent to LLM</span>
+    </div>
+  </div>
+
+  <!-- ── LAYER 3: LLM ─────────────────────────────────────── -->
+  <div class="layer">
+    <div class="layer-label">
+      <span class="layer-tag llm">LLM</span>
+    </div>
+    <div class="layer-body">
+      <div class="card llm-card">
+        <div class="card-title">
+          <span class="card-dot" style="background:var(--llm)"></span>
+          <span style="color:var(--llm)">LLM</span>
+          <span style="color:var(--text-dim); font-size:0.7rem; font-weight:400">— the planner and decider</span>
+        </div>
+        <div class="card-sub">The only component that "thinks." Everything else executes what it decides.</div>
+        <div class="card-items">
+          <div class="card-item">Reads the task, skills, and tool list — decides the next step</div>
+          <div class="card-item">Outputs structured <strong>tool-call requests</strong> (not free text) — e.g., which tool to call, with what arguments</div>
+          <div class="card-item">Reads back tool results and decides: call another tool, or produce final answer?</div>
+          <div class="card-item">Drafts the human-readable summary / confirmation when the task is complete</div>
+          <div class="card-item">Skills guide <em>how</em> it approaches the task — the LLM still decides <em>what</em> to do step by step</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow-row">
+    <div class="arrow-spacer"></div>
+    <div class="arrow-connector">
+      <div class="arrow-tip">▼</div>
+      <span class="arrow-label">structured tool-call request (tool name + args) sent to Runtime</span>
+    </div>
+  </div>
+
+  <!-- ── LAYER 4: TOOL EXECUTION ──────────────────────────── -->
+  <div class="layer">
+    <div class="layer-label" style="padding-top:20px">
+      <span class="layer-tag tools">Tool Layer</span>
+    </div>
+    <div class="layer-body">
+      <div class="card tool-ex-card">
+        <div class="card-title">
+          <span class="card-dot" style="background:var(--plugin)"></span>
+          <span style="color:var(--plugin)">Tool Execution</span>
+          <span style="color:var(--text-dim); font-size:0.7rem; font-weight:400">— run by the Runtime, requested by the LLM</span>
+        </div>
+        <div class="card-sub">Three types of tools, all reaching the LLM the same way — as results fed back into the loop.</div>
+
+        <div class="tool-grid">
+
+          <!-- SKILLS -->
+          <div class="tool-card skill-card">
+            <div class="tool-card-title">
+              <span class="dot" style="background:var(--skill)"></span>
+              <span style="color:var(--skill)">Skills</span>
+            </div>
+            <div class="tool-role">Playbooks / SOPs. Not a tool the LLM calls — guidance loaded into its context before it starts.</div>
+            <div style="margin-top:4px">
+              <div style="font-size:0.63rem; color:var(--text-dim); margin-bottom:6px">Example instructions injected:</div>
+              <span class="code-pill skill-pill">When asked for P0 bugs:</span><br>
+              <span class="code-pill skill-pill">1) query the tracker</span><br>
+              <span class="code-pill skill-pill">2) group by component</span><br>
+              <span class="code-pill skill-pill">3) bullet format summary</span><br>
+              <span class="code-pill skill-pill">4) post to #triage w/ template</span>
+            </div>
+          </div>
+
+          <!-- PLUGINS -->
+          <div class="tool-card plugin-card">
+            <div class="tool-card-title">
+              <span class="dot" style="background:var(--plugin)"></span>
+              <span style="color:var(--plugin)">Plugins</span>
+            </div>
+            <div class="tool-role">Local, in-process tool functions. Fast, no network hop. Installed code the Runtime can call directly.</div>
+            <div style="margin-top:4px">
+              <div style="font-size:0.63rem; color:var(--text-dim); margin-bottom:6px">Example calls:</div>
+              <span class="code-pill plugin-pill">jira.searchIssues()</span>
+              <span class="code-pill plugin-pill">slack.postMessage()</span>
+              <span class="code-pill plugin-pill">formatter.makeTriageSummary()</span>
+              <span class="code-pill plugin-pill">fs.readFile()</span>
+              <span class="code-pill plugin-pill">git.commit()</span>
+            </div>
+          </div>
+
+          <!-- MCP -->
+          <div class="tool-card mcp-card">
+            <div class="tool-card-title">
+              <span class="dot" style="background:var(--mcp)"></span>
+              <span style="color:var(--mcp)">MCP Servers</span>
+            </div>
+            <div class="tool-role">Standardized external tool providers over the MCP protocol. Same idea as plugins — but remote, isolated, and swappable.</div>
+            <div style="margin-top:4px">
+              <div style="font-size:0.63rem; color:var(--text-dim); margin-bottom:6px">Example calls:</div>
+              <span class="code-pill mcp-pill">mcp://github/search_issues</span>
+              <span class="code-pill mcp-pill">mcp://linear/list_issues</span>
+              <span class="code-pill mcp-pill">mcp://confluence/get_page</span>
+              <span class="code-pill mcp-pill">mcp://browser/navigate</span>
+            </div>
+          </div>
+
+        </div><!-- /tool-grid -->
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow-row">
+    <div class="arrow-spacer"></div>
+    <div class="arrow-connector">
+      <div class="arrow-tip">▼</div>
+      <span class="arrow-label">tool results returned to LLM — loop repeats until task is complete</span>
+    </div>
+  </div>
+
+  <!-- ── LAYER 5: BACK TO USER ────────────────────────────── -->
+  <div class="layer">
+    <div class="layer-label">
+      <span class="layer-tag interface">Output</span>
+    </div>
+    <div class="layer-body">
+      <div class="card user-card">
+        <div class="card-title">
+          <span class="card-dot" style="background:var(--user)"></span>
+          <span style="color:var(--user)">ClawBot → User</span>
+          <span style="color:var(--text-dim); font-size:0.7rem; font-weight:400">— task complete</span>
+        </div>
+        <div class="card-sub">LLM produces final answer. Runtime hands it back to ClawBot. ClawBot posts to the originating channel.</div>
+        <div class="card-items">
+          <div class="card-item">Summary of P0 bugs posted to <strong style="color:var(--user)">#triage</strong> in Slack</div>
+          <div class="card-item">Confirmation message sent back to the user who requested it</div>
+          <div class="card-item">Gateway log records: which tools were called, results, duration, any errors</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /diagram -->
+
+
+<!-- MICRO-LOOP -->
+<div class="loop-section">
+  <div class="loop-title">The Micro-Loop</div>
+  <div class="loop-sub">What one full cycle looks like inside the Runtime ↔ LLM back-and-forth</div>
+
+  <div class="loop-steps">
+    <div></div>
+    <div class="loop-body">
+
+      <div class="loop-step">
+        <div class="step-num step-llm">L</div>
+        <div class="step-content">
+          <div class="step-actor llm">LLM → Runtime (tool request)</div>
+          <div class="step-desc">Decides first action. Outputs a structured call:</div>
+          <div class="step-code">jira.searchIssues({ project: "X", priority: "P0", state: "open" })</div>
+        </div>
+      </div>
+
+      <div class="loop-step">
+        <div class="step-num step-runtime">R</div>
+        <div class="step-content">
+          <div class="step-actor runtime">Runtime → Plugin (executes)</div>
+          <div class="step-desc">Checks permission, runs the plugin, gets back a list of issues.</div>
+          <div class="step-result">→ Returns: [ {id: "X-101", title: "Auth fails on login"}, {id: "X-102", ...} ]</div>
+        </div>
+      </div>
+
+      <div class="loop-step">
+        <div class="step-num step-llm">L</div>
+        <div class="step-content">
+          <div class="step-actor llm">LLM → Runtime (next tool request)</div>
+          <div class="step-desc">Reads the issue list. Decides to format it now:</div>
+          <div class="step-code">formatter.makeTriageSummary({ issues: [{...}, {...}] })</div>
+        </div>
+      </div>
+
+      <div class="loop-step">
+        <div class="step-num step-runtime">R</div>
+        <div class="step-content">
+          <div class="step-actor runtime">Runtime → Plugin (executes)</div>
+          <div class="step-desc">Formats the issues using the triage template defined in the Skill.</div>
+          <div class="step-result">→ Returns: "**P0 Bugs — Project X**\n• X-101: Auth fails on login\n• X-102: ..."</div>
+        </div>
+      </div>
+
+      <div class="loop-step">
+        <div class="step-num step-llm">L</div>
+        <div class="step-content">
+          <div class="step-actor llm">LLM → Runtime (final action)</div>
+          <div class="step-desc">Has everything it needs. Posts to Slack:</div>
+          <div class="step-code">slack.postMessage({ channel: "#triage", text: "**P0 Bugs — Project X**\n..." })</div>
+        </div>
+      </div>
+
+      <div class="loop-step">
+        <div class="step-num step-runtime">R</div>
+        <div class="step-content">
+          <div class="step-actor runtime">Runtime → Plugin (executes)</div>
+          <div class="step-desc">Posts to Slack. Gets confirmation back.</div>
+          <div class="step-result">→ Returns: { ok: true, ts: "1234567890.123" }</div>
+        </div>
+      </div>
+
+      <div class="loop-step">
+        <div class="step-num step-done">✓</div>
+        <div class="step-content">
+          <div class="step-actor done">LLM → Final Output</div>
+          <div class="step-desc">No more tool calls needed. Produces human-readable confirmation for the user. ClawBot posts it back to the originating channel.</div>
+          <div class="step-result">→ "Done — found 2 open P0 bugs for Project X and posted the summary to #triage."</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- KEY -->
+<div class="key-row">
+  <div class="key-item"><span class="key-dot" style="background:var(--user)"></span> Interface (ClawBot)</div>
+  <div class="key-item"><span class="key-dot" style="background:var(--runtime)"></span> Runtime (Orchestrator)</div>
+  <div class="key-item"><span class="key-dot" style="background:var(--llm)"></span> LLM (Planner)</div>
+  <div class="key-item"><span class="key-dot" style="background:var(--skill)"></span> Skills (Guidance)</div>
+  <div class="key-item"><span class="key-dot" style="background:var(--plugin)"></span> Plugins (Local Tools)</div>
+  <div class="key-item"><span class="key-dot" style="background:var(--mcp)"></span> MCP Servers (Remote Tools)</div>
+</div>
+
+</body>
+</html>

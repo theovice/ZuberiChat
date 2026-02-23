@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OpenClaw Flow — Your Setup</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;600&family=Epilogue:wght@400;600;700;900&display=swap');
+
+:root {
+  --bg:        #080b0f;
+  --surface:   #0c1017;
+  --raised:    #111820;
+  --border:    #1c2530;
+  --border2:   #263040;
+  --kilo:      #f0a500;
+  --kilo-dim:  rgba(240,165,0,0.12);
+  --m710a:     #00c9a7;
+  --m710a-dim: rgba(0,201,167,0.1);
+  --m710b:     #3b9eff;
+  --m710b-dim: rgba(59,158,255,0.1);
+  --cloud:     #b06af0;
+  --cloud-dim: rgba(176,106,240,0.1);
+  --local-llm: #ff6b6b;
+  --local-dim: rgba(255,107,107,0.1);
+  --text:      #9eb5cc;
+  --text-bright:#ddeeff;
+  --text-dim:  #445566;
+  --skill:     #f59e0b;
+  --plugin:    #10b981;
+  --mcp:       #ef4444;
+  --runtime:   #3b82f6;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  background: var(--bg);
+  font-family: 'IBM Plex Mono', monospace;
+  color: var(--text);
+  min-height: 100vh;
+  padding: 48px 24px 100px;
+}
+
+body::before {
+  content:'';
+  position:fixed; inset:0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+  pointer-events:none; z-index:0;
+}
+
+.wrap { position:relative; z-index:1; max-width:1140px; margin:0 auto; }
+
+/* HEADER */
+.hdr { text-align:center; margin-bottom:56px; }
+.hdr h1 {
+  font-family:'Epilogue',sans-serif; font-weight:900;
+  font-size:clamp(1.6rem,4vw,2.6rem);
+  color:var(--text-bright); letter-spacing:-0.03em; margin-bottom:6px;
+}
+.badge-row { display:flex; justify-content:center; gap:10px; flex-wrap:wrap; margin-top:16px; }
+.badge {
+  font-size:0.62rem; letter-spacing:0.1em; text-transform:uppercase;
+  padding:4px 12px; border-radius:20px; border:1px solid; font-weight:600;
+}
+.badge.kilo  { color:var(--kilo);  border-color:var(--kilo);  background:var(--kilo-dim); }
+.badge.m710a { color:var(--m710a); border-color:var(--m710a); background:var(--m710a-dim); }
+.badge.m710b { color:var(--m710b); border-color:var(--m710b); background:var(--m710b-dim); }
+.badge.cloud { color:var(--cloud); border-color:var(--cloud); background:var(--cloud-dim); }
+.badge.local { color:var(--local-llm); border-color:var(--local-llm); background:var(--local-dim); }
+
+/* TASK BANNER */
+.task-banner {
+  border:1px solid #1a3020; border-left:3px solid var(--m710a);
+  background:linear-gradient(135deg,#0a150e,#080f14);
+  border-radius:8px; padding:18px 24px; margin-bottom:52px;
+}
+.task-label { font-size:0.6rem; color:var(--m710a); letter-spacing:0.15em; text-transform:uppercase; margin-bottom:6px; }
+.task-text  { color:var(--text-bright); font-size:0.85rem; line-height:1.6; }
+.task-text strong { color:var(--kilo); }
+
+/* FLOW GRID */
+.flow { display:grid; grid-template-columns:180px 1fr; gap:0; }
+.node-label {
+  display:flex; align-items:flex-start; justify-content:flex-end;
+  padding-right:20px; padding-top:22px;
+}
+.hw-tag {
+  font-size:0.58rem; letter-spacing:0.12em; text-transform:uppercase;
+  padding:3px 9px; border-radius:3px; border:1px solid; font-weight:600;
+  white-space:nowrap; text-align:right;
+}
+.hw-tag.kilo  { color:var(--kilo);  border-color:var(--kilo);  background:var(--kilo-dim); }
+.hw-tag.m710a { color:var(--m710a); border-color:var(--m710a); background:var(--m710a-dim); }
+.hw-tag.m710b { color:var(--m710b); border-color:var(--m710b); background:var(--m710b-dim); }
+.hw-tag.cloud { color:var(--cloud); border-color:var(--cloud); background:var(--cloud-dim); }
+.hw-tag.any   { color:var(--text-dim); border-color:var(--border2); background:transparent; }
+
+.node-body { padding:12px 0; }
+
+.card {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:10px; padding:18px 22px; margin-left:28px;
+  position:relative; transition:border-color .2s;
+}
+.card:hover { border-color:var(--border2); }
+.card::before {
+  content:''; position:absolute;
+  left:-28px; top:50%; width:28px; height:2px; background:var(--border2);
+}
+.card.c-kilo  { border-left:3px solid var(--kilo); }
+.card.c-m710a { border-left:3px solid var(--m710a); }
+.card.c-m710b { border-left:3px solid var(--m710b); }
+.card.c-cloud { border-left:3px solid var(--cloud); }
+.card.c-rt    { border-left:3px solid var(--runtime); }
+
+.card-head { display:flex; align-items:center; gap:10px; margin-bottom:5px; }
+.cdot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+.card-title { font-family:'Epilogue',sans-serif; font-weight:700; font-size:0.95rem; color:var(--text-bright); }
+.card-sub { font-size:0.68rem; color:var(--text-dim); margin-bottom:12px; margin-left:18px; }
+.items { display:flex; flex-direction:column; gap:5px; margin-left:18px; }
+.item { font-size:0.72rem; color:var(--text); line-height:1.55; display:flex; gap:8px; }
+.item::before { content:'→'; color:var(--text-dim); flex-shrink:0; }
+
+/* ARROW */
+.arr-row { display:grid; grid-template-columns:180px 1fr; }
+.arr-body {
+  margin-left:28px; padding:0 0 0 22px;
+  height:34px; position:relative; display:flex; align-items:center;
+}
+.arr-body::before {
+  content:''; position:absolute;
+  left:42px; top:0; bottom:0; width:2px; background:var(--border2);
+}
+.arr-body .atip { position:absolute; left:34px; bottom:-1px; color:var(--border2); font-size:13px; }
+.arr-label { margin-left:56px; font-size:0.62rem; color:var(--text-dim); font-style:italic; letter-spacing:0.03em; }
+
+/* MODEL ROUTER */
+.router-box { margin-left:28px; margin-top:14px; border:1px solid var(--border2); border-radius:8px; overflow:hidden; }
+.router-head { background:var(--raised); padding:10px 16px; font-size:0.65rem; letter-spacing:0.12em; text-transform:uppercase; color:var(--text-dim); font-weight:600; }
+.router-grid { display:grid; grid-template-columns:1fr 1fr; gap:1px; background:var(--border); }
+.router-cell { background:var(--surface); padding:12px 16px; }
+.router-cell-title { font-size:0.65rem; font-weight:600; letter-spacing:0.1em; text-transform:uppercase; margin-bottom:8px; }
+.router-cell.cloud-cell .router-cell-title { color:var(--cloud); }
+.router-cell.local-cell .router-cell-title { color:var(--local-llm); }
+.router-row { display:flex; align-items:flex-start; gap:6px; font-size:0.68rem; color:var(--text); margin-bottom:5px; line-height:1.5; }
+.r-dot { width:5px; height:5px; border-radius:50%; flex-shrink:0; margin-top:5px; }
+
+/* GPU callout — positive framing */
+.gpu-advantage {
+  margin-left:28px; margin-top:10px;
+  border:1px solid rgba(0,201,167,.25);
+  border-left:3px solid var(--m710a);
+  background:rgba(0,201,167,.04);
+  border-radius:6px; padding:10px 14px;
+  font-size:0.68rem; color:var(--text); line-height:1.6;
+}
+.gpu-advantage strong { color:var(--m710a); }
+
+/* TOOL LAYER */
+.tool-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-left:18px; margin-top:14px; }
+.tcell { border-radius:7px; padding:12px 14px; border:1px solid; }
+.tcell.skill  { border-color:rgba(245,158,11,.25); background:rgba(245,158,11,.04); }
+.tcell.plugin { border-color:rgba(16,185,129,.25); background:rgba(16,185,129,.04); }
+.tcell.mcp    { border-color:rgba(239,68,68,.25);  background:rgba(239,68,68,.04); }
+.tcell-title { font-family:'Epilogue',sans-serif; font-weight:700; font-size:0.7rem; letter-spacing:0.05em; text-transform:uppercase; display:flex; align-items:center; gap:6px; margin-bottom:7px; }
+.tcell-desc { font-size:0.63rem; color:var(--text-dim); margin-bottom:8px; line-height:1.5; }
+.pill { display:inline-block; font-size:0.6rem; padding:2px 7px; border-radius:4px; margin:2px 2px 2px 0; font-family:'IBM Plex Mono',monospace; border:1px solid; }
+.pill.s { background:rgba(245,158,11,.1); color:#fbbf24; border-color:rgba(245,158,11,.2); }
+.pill.p { background:rgba(16,185,129,.1); color:#34d399; border-color:rgba(16,185,129,.2); }
+.pill.m { background:rgba(239,68,68,.1);  color:#f87171; border-color:rgba(239,68,68,.2); }
+
+/* HW MAP */
+.hw-section { margin-top:64px; }
+.section-title { font-family:'Epilogue',sans-serif; font-weight:900; font-size:1rem; color:var(--text-bright); letter-spacing:0.04em; text-transform:uppercase; margin-bottom:4px; padding-left:208px; }
+.section-sub   { font-size:0.65rem; color:var(--text-dim); margin-bottom:24px; padding-left:208px; }
+.hw-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+.hw-card { border-radius:10px; padding:18px 16px; border:1px solid; position:relative; overflow:hidden; }
+.hw-card::after { content:''; position:absolute; top:0; right:0; width:60px; height:60px; border-radius:0 0 0 60px; opacity:0.08; }
+.hw-card.kilo  { border-color:rgba(240,165,0,.3);  background:linear-gradient(135deg,#0f0d04,#0c1017); }
+.hw-card.kilo::after  { background:var(--kilo); }
+.hw-card.m710a { border-color:rgba(0,201,167,.3);  background:linear-gradient(135deg,#040f0d,#0c1017); }
+.hw-card.m710a::after { background:var(--m710a); }
+.hw-card.m710b { border-color:rgba(59,158,255,.3);  background:linear-gradient(135deg,#04080f,#0c1017); }
+.hw-card.m710b::after { background:var(--m710b); }
+.hw-card.cloud { border-color:rgba(176,106,240,.3); background:linear-gradient(135deg,#0b060f,#0c1017); }
+.hw-card.cloud::after { background:var(--cloud); }
+.hw-card-name { font-family:'Epilogue',sans-serif; font-weight:900; font-size:1rem; margin-bottom:2px; }
+.hw-card.kilo  .hw-card-name { color:var(--kilo); }
+.hw-card.m710a .hw-card-name { color:var(--m710a); }
+.hw-card.m710b .hw-card-name { color:var(--m710b); }
+.hw-card.cloud .hw-card-name { color:var(--cloud); }
+.hw-card-role { font-size:0.62rem; color:var(--text-dim); margin-bottom:14px; }
+.hw-spec { font-size:0.62rem; color:var(--text-dim); margin-bottom:3px; display:flex; gap:6px; }
+.hw-spec strong { color:var(--text); }
+.hw-runs { margin-top:12px; }
+.hw-runs-label { font-size:0.58rem; letter-spacing:0.12em; text-transform:uppercase; color:var(--text-dim); margin-bottom:6px; }
+.hw-pill { display:inline-block; font-size:0.6rem; padding:2px 8px; border-radius:3px; margin:2px 2px 2px 0; border:1px solid; }
+.hw-card.kilo  .hw-pill { border-color:rgba(240,165,0,.3); color:var(--kilo); background:rgba(240,165,0,.07); }
+.hw-card.m710a .hw-pill { border-color:rgba(0,201,167,.3); color:var(--m710a); background:rgba(0,201,167,.07); }
+.hw-card.m710b .hw-pill { border-color:rgba(59,158,255,.3); color:var(--m710b); background:rgba(59,158,255,.07); }
+.hw-card.cloud .hw-pill { border-color:rgba(176,106,240,.3); color:var(--cloud); background:rgba(176,106,240,.07); }
+.gpu-badge {
+  display:inline-block; margin-top:10px;
+  font-size:0.6rem; padding:4px 10px; border-radius:4px;
+  border:1px solid rgba(0,201,167,.3); color:var(--m710a); background:rgba(0,201,167,.07);
+}
+
+/* LOOP */
+.loop-section { margin-top:64px; }
+.loop-steps { display:grid; grid-template-columns:180px 1fr; }
+.loop-body { margin-left:28px; }
+.lstep { display:grid; grid-template-columns:28px 1fr; gap:14px; position:relative; }
+.lstep:not(:last-child)::before { content:''; position:absolute; left:13px; top:28px; bottom:-10px; width:2px; background:var(--border); }
+.lnum { width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:0.6rem; font-weight:700; flex-shrink:0; position:relative; z-index:1; }
+.ln-kilo  { background:rgba(240,165,0,.15);  border:1px solid rgba(240,165,0,.4);  color:var(--kilo); }
+.ln-cloud { background:rgba(176,106,240,.15); border:1px solid rgba(176,106,240,.4); color:var(--cloud); }
+.ln-m710a { background:rgba(0,201,167,.15);  border:1px solid rgba(0,201,167,.4);  color:var(--m710a); }
+.ln-local { background:rgba(255,107,107,.15); border:1px solid rgba(255,107,107,.4); color:var(--local-llm); }
+.ln-done  { background:rgba(0,201,167,.15);  border:1px solid rgba(0,201,167,.4);  color:var(--m710a); }
+.lcontent { padding:2px 0 20px; }
+.lactor { font-size:0.58rem; letter-spacing:0.12em; text-transform:uppercase; font-weight:600; margin-bottom:4px; }
+.lactor.kilo  { color:var(--kilo); }
+.lactor.cloud { color:var(--cloud); }
+.lactor.m710a { color:var(--m710a); }
+.lactor.local { color:var(--local-llm); }
+.lactor.done  { color:var(--m710a); }
+.ldesc { font-size:0.78rem; color:var(--text); line-height:1.55; }
+.lcode   { display:inline-block; background:#0a1018; border:1px solid var(--border2); border-radius:5px; padding:6px 12px; font-size:0.68rem; color:#93c5fd; margin-top:6px; line-height:1.5; }
+.lresult { display:inline-block; background:#04120e; border:1px solid rgba(0,201,167,.2); border-radius:5px; padding:6px 12px; font-size:0.68rem; color:#6ee7b7; margin-top:6px; line-height:1.5; }
+.lroute { display:inline-flex; align-items:center; gap:6px; font-size:0.64rem; margin-top:6px; padding:4px 10px; border-radius:4px; }
+.lroute.to-cloud { background:rgba(176,106,240,.08); border:1px solid rgba(176,106,240,.2); color:var(--cloud); }
+.lroute.to-local { background:rgba(255,107,107,.08); border:1px solid rgba(255,107,107,.2); color:var(--local-llm); }
+.lroute.to-m710a { background:rgba(0,201,167,.08);  border:1px solid rgba(0,201,167,.2);  color:var(--m710a); }
+
+.key { display:flex; flex-wrap:wrap; gap:20px; margin-top:48px; padding-left:208px; }
+.ki  { display:flex; align-items:center; gap:7px; font-size:0.65rem; color:var(--text-dim); }
+.kdot { width:8px; height:8px; border-radius:50%; }
+
+@media(max-width:720px){
+  .flow,.arr-row,.loop-steps { grid-template-columns:90px 1fr; }
+  .hw-grid { grid-template-columns:1fr 1fr; }
+  .tool-grid,.router-grid { grid-template-columns:1fr; }
+  .section-title,.section-sub,.key { padding-left:0; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- HEADER -->
+<div class="hdr">
+  <h1>OpenClaw Flow — Your Setup</h1>
+  <div style="font-size:0.7rem;color:var(--text-dim);margin-top:4px;letter-spacing:0.06em;">KILO · M710q-A · M710q-B · Cloud APIs · Ollama GPU</div>
+  <div class="badge-row">
+    <span class="badge kilo">KILO — i7-13700K · 64GB · RTX 3060 12GB</span>
+    <span class="badge m710a">M710q-A — Persistence + Memory</span>
+    <span class="badge m710b">M710q-B — Execution + Browser</span>
+    <span class="badge cloud">Cloud APIs — Heavy Planning + Reasoning</span>
+    <span class="badge local">Ollama GPU — Fast Local + Private Data</span>
+  </div>
+</div>
+
+<!-- TASK BANNER -->
+<div class="task-banner">
+  <div class="task-label">Example Task Input</div>
+  <div class="task-text">
+    <strong>You → CLI on KILO:</strong> "Research competitors for Examiner.Sable, summarize findings, push a report to the repo, and schedule a weekly refresh."
+  </div>
+</div>
+
+<!-- ── FLOW ── -->
+
+<!-- 1. CLI -->
+<div class="flow">
+  <div class="node-label"><span class="hw-tag kilo">KILO</span></div>
+  <div class="node-body">
+    <div class="card c-kilo">
+      <div class="card-head">
+        <span class="cdot" style="background:var(--kilo)"></span>
+        <span class="card-title" style="color:var(--kilo)">You → Custom CLI Gateway</span>
+        <span style="color:var(--text-dim);font-size:0.68rem;margin-left:4px">— your ClawBot surface</span>
+      </div>
+      <div class="card-sub">Runs on KILO. The only thing you interact with directly.</div>
+      <div class="items">
+        <div class="item">Receives your natural language request from the terminal</div>
+        <div class="item">Identifies session + project context (Examiner.Sable, your permissions)</div>
+        <div class="item">Passes task + context to OpenClaw Runtime — its job ends here until the answer comes back</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="arr-row"><div></div><div class="arr-body"><div class="atip">▼</div><span class="arr-label">task + session context → Runtime</span></div></div>
+
+<!-- 2. RUNTIME -->
+<div class="flow">
+  <div class="node-label"><span class="hw-tag kilo">KILO</span></div>
+  <div class="node-body">
+    <div class="card c-rt">
+      <div class="card-head">
+        <span class="cdot" style="background:var(--runtime)"></span>
+        <span class="card-title" style="color:#60a5fa">OpenClaw Runtime</span>
+        <span style="color:var(--text-dim);font-size:0.68rem;margin-left:4px">— orchestration, policy, MCP gateway</span>
+      </div>
+      <div class="card-sub">Runs on KILO. Control plane — holds secrets, permissions, audit logs, tool registry.</div>
+      <div class="items">
+        <div class="item">Loads relevant <strong style="color:#fbbf24">Skills</strong> (playbooks) into LLM context before execution starts</div>
+        <div class="item">Registers <strong style="color:#34d399">Plugins</strong> (local) and <strong style="color:#f87171">MCP servers</strong> (remote on M710q-B)</div>
+        <div class="item">Runs Policy Gate — checks permissions, data privacy classification, write-action confirmations</div>
+        <div class="item">Routes to Model Router: private data? → Ollama GPU on KILO. Complex reasoning? → Cloud API</div>
+        <div class="item">Manages the full loop: LLM → tool call → result → LLM → repeat until done</div>
+        <div class="item">Every tool call logged at MCP Gateway: agent, tool, inputs, outputs, timestamp</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="arr-row"><div></div><div class="arr-body"><div class="atip">▼</div><span class="arr-label">task + skills + tool list → Model Router</span></div></div>
+
+<!-- 3. MODEL ROUTER -->
+<div class="flow">
+  <div class="node-label" style="padding-top:14px"><span class="hw-tag kilo">KILO</span></div>
+  <div class="node-body">
+    <div class="card c-kilo" style="padding-bottom:14px">
+      <div class="card-head">
+        <span class="cdot" style="background:var(--kilo)"></span>
+        <span class="card-title" style="color:var(--kilo)">Model Router</span>
+        <span style="color:var(--text-dim);font-size:0.68rem;margin-left:4px">— decides which LLM handles this request</span>
+      </div>
+      <div class="card-sub">Two backends. Choice is made by data sensitivity and task complexity — not availability.</div>
+      <div class="router-box">
+        <div class="router-head">Routing Decision Table</div>
+        <div class="router-grid">
+          <div class="router-cell cloud-cell">
+            <div class="router-cell-title">☁ Cloud API (Claude / GPT-4o via OpenRouter)</div>
+            <div class="router-row"><span class="r-dot" style="background:var(--cloud)"></span>Complex planning and multi-step reasoning</div>
+            <div class="router-row"><span class="r-dot" style="background:var(--cloud)"></span>High-quality code generation (DevAgent tasks)</div>
+            <div class="router-row"><span class="r-dot" style="background:var(--cloud)"></span>Research + summarization using public data</div>
+            <div class="router-row"><span class="r-dot" style="background:var(--cloud)"></span>Tasks requiring frontier model quality</div>
+          </div>
+          <div class="router-cell local-cell">
+            <div class="router-cell-title">🔒 Ollama GPU (RTX 3060 — fast, stays on KILO)</div>
+            <div class="router-row"><span class="r-dot" style="background:var(--local-llm)"></span>Any context containing local file paths</div>
+            <div class="router-row"><span class="r-dot" style="background:var(--local-llm)"></span>Email or calendar content</div>
+            <div class="router-row"><span class="r-dot" style="background:var(--local-llm)"></span>Personal identifiers or private project data</div>
+            <div class="router-row"><span class="r-dot" style="background:var(--local-llm)"></span>Fast tool-call classification and quick tasks</div>
+            <div class="router-row"><span class="r-dot" style="background:var(--local-llm)"></span>Anything marked local-only by policy</div>
+          </div>
+        </div>
+      </div>
+      <div class="gpu-advantage">
+        <strong>RTX 3060 12GB advantage:</strong> Runs 7B models at Q4_K_M entirely in VRAM at ~40–50 tokens/sec. Private data never leaves KILO. Cloud APIs handle complexity. Both backends active simultaneously — no conflict.
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="arr-row"><div></div><div class="arr-body"><div class="atip">▼</div><span class="arr-label">LLM outputs structured tool-call requests → Runtime executes</span></div></div>
+
+<!-- 4. TOOL LAYER -->
+<div class="flow">
+  <div class="node-label" style="padding-top:14px"><span class="hw-tag any">All nodes</span></div>
+  <div class="node-body">
+    <div class="card c-rt" style="padding-bottom:14px">
+      <div class="card-head">
+        <span class="cdot" style="background:var(--plugin)"></span>
+        <span class="card-title" style="color:#34d399">Tool Execution Layer</span>
+        <span style="color:var(--text-dim);font-size:0.68rem;margin-left:4px">— run by Runtime, dispatched to correct node by risk tier</span>
+      </div>
+      <div class="card-sub">Three tool types. All return results back to the LLM the same way. Location varies by risk.</div>
+      <div class="tool-grid">
+        <div class="tcell skill">
+          <div class="tcell-title"><span class="cdot" style="background:var(--skill)"></span><span style="color:var(--skill)">Skills</span></div>
+          <div class="tcell-desc">Playbooks loaded into LLM context before execution. Not called — they guide the LLM's approach.</div>
+          <span class="pill s">research_workflow</span>
+          <span class="pill s">repo_push_sop</span>
+          <span class="pill s">schedule_pattern</span>
+          <span class="pill s">competitor_analysis</span>
+        </div>
+        <div class="tcell plugin">
+          <div class="tcell-title"><span class="cdot" style="background:var(--plugin)"></span><span style="color:var(--plugin)">Plugins</span><span style="font-size:0.58rem;color:var(--text-dim);margin-left:4px">(KILO)</span></div>
+          <div class="tcell-desc">In-process calls. Low-risk, fast, trusted. Run directly on KILO — no network hop.</div>
+          <span class="pill p">git.clone</span>
+          <span class="pill p">git.commit</span>
+          <span class="pill p">git.push</span>
+          <span class="pill p">fs.write</span>
+          <span class="pill p">formatter.report</span>
+        </div>
+        <div class="tcell mcp">
+          <div class="tcell-title"><span class="cdot" style="background:var(--mcp)"></span><span style="color:var(--mcp)">MCP Servers</span><span style="font-size:0.58rem;color:var(--text-dim);margin-left:4px">(M710q-B)</span></div>
+          <div class="tcell-desc">Remote, isolated tool servers over Tailscale. Risky or heavy ops run here, not on KILO.</div>
+          <span class="pill m">mcp://browser/search</span>
+          <span class="pill m">mcp://github/read</span>
+          <span class="pill m">mcp://rag/query</span>
+          <span class="pill m">mcp://scheduler/queue</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="arr-row"><div></div><div class="arr-body"><div class="atip">▼</div><span class="arr-label">tool results → LLM → loop until task complete</span></div></div>
+
+<!-- 5. PERSISTENCE -->
+<div class="flow">
+  <div class="node-label"><span class="hw-tag m710a">M710q-A</span></div>
+  <div class="node-body">
+    <div class="card c-m710a">
+      <div class="card-head">
+        <span class="cdot" style="background:var(--m710a)"></span>
+        <span class="card-title" style="color:var(--m710a)">Always-On Persistence Layer</span>
+        <span style="color:var(--text-dim);font-size:0.68rem;margin-left:4px">— memory, scheduling, state</span>
+      </div>
+      <div class="card-sub">M710q-A runs 24/7. Headless, controlled from KILO over Tailscale. Upgrade to 32GB RAM.</div>
+      <div class="items">
+        <div class="item"><strong style="color:var(--m710a)">MemoryAgent + Qdrant</strong> — long-term vector DB; indexes past sessions, decisions, Examiner.Sable project context</div>
+        <div class="item"><strong style="color:var(--m710a)">SchedulerAgent + Redis</strong> — task queue for deferred and recurring jobs (weekly competitor refresh, cron tasks)</div>
+        <div class="item">Survives KILO being off — scheduled tasks fire whether you're at your desk or not</div>
+        <div class="item">Audit log archive — every tool call stored here for debugging and replay</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="arr-row"><div></div><div class="arr-body"><div class="atip">▼</div><span class="arr-label">browser research dispatched to M710q-B · schedule queued on M710q-A</span></div></div>
+
+<!-- 6. EXECUTION -->
+<div class="flow">
+  <div class="node-label"><span class="hw-tag m710b">M710q-B</span></div>
+  <div class="node-body">
+    <div class="card c-m710b">
+      <div class="card-head">
+        <span class="cdot" style="background:var(--m710b)"></span>
+        <span class="card-title" style="color:var(--m710b)">Always-On Execution Layer</span>
+        <span style="color:var(--text-dim);font-size:0.68rem;margin-left:4px">— browser, ops, isolated tools</span>
+      </div>
+      <div class="card-sub">M710q-B runs 24/7. Handles anything you want isolated from KILO. Controlled over Tailscale.</div>
+      <div class="items">
+        <div class="item"><strong style="color:var(--m710b)">BrowserAgent (Playwright)</strong> — web research, scraping, competitor analysis for Examiner.Sable</div>
+        <div class="item"><strong style="color:var(--m710b)">OpsAgent</strong> — Docker health, disk monitoring, resource alerts across all three nodes</div>
+        <div class="item">Compromise here stays isolated — secrets, Runtime, and GPU inference remain on KILO</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="arr-row"><div></div><div class="arr-body"><div class="atip">▼</div><span class="arr-label">all results collected · final answer handed back to CLI</span></div></div>
+
+<!-- 7. OUTPUT -->
+<div class="flow">
+  <div class="node-label"><span class="hw-tag kilo">KILO</span></div>
+  <div class="node-body">
+    <div class="card c-kilo">
+      <div class="card-head">
+        <span class="cdot" style="background:var(--kilo)"></span>
+        <span class="card-title" style="color:var(--kilo)">CLI → You</span>
+        <span style="color:var(--text-dim);font-size:0.68rem;margin-left:4px">— task complete</span>
+      </div>
+      <div class="card-sub">Returns to your terminal on KILO with the completed work and a summary of what ran.</div>
+      <div class="items">
+        <div class="item">Competitor analysis report pushed to GitHub repo</div>
+        <div class="item">Weekly refresh job queued in SchedulerAgent on M710q-A — fires every Monday 9AM</div>
+        <div class="item">Confirmation + commit hash printed to your CLI</div>
+        <div class="item">Full tool-call audit log archived to M710q-A</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── HARDWARE MAP ── -->
+<div class="hw-section">
+  <div class="section-title">Your Hardware Map</div>
+  <div class="section-sub">What runs where — every component assigned to a physical node</div>
+  <div class="hw-grid">
+
+    <div class="hw-card kilo">
+      <div class="hw-card-name">KILO</div>
+      <div class="hw-card-role">Primary machine · Control plane</div>
+      <div class="hw-spec"><strong>CPU</strong> i7-13700K · 16c/24t</div>
+      <div class="hw-spec"><strong>RAM</strong> 64GB DDR4 @ 3600</div>
+      <div class="hw-spec"><strong>GPU</strong> RTX 3060 12GB VRAM</div>
+      <div class="hw-spec"><strong>OS</strong> Windows 11 Pro</div>
+      <div class="hw-runs">
+        <div class="hw-runs-label">Runs</div>
+        <span class="hw-pill">OpenClaw Runtime</span>
+        <span class="hw-pill">CLI Gateway</span>
+        <span class="hw-pill">MCP Gateway</span>
+        <span class="hw-pill">Ollama + RTX 3060</span>
+        <span class="hw-pill">git / fs / shell plugins</span>
+        <span class="hw-pill">email / calendar MCP</span>
+        <span class="hw-pill">Tailscale client</span>
+      </div>
+      <div class="gpu-badge">✓ RTX 3060 active for GPU inference</div>
+    </div>
+
+    <div class="hw-card m710a">
+      <div class="hw-card-name">M710q-A</div>
+      <div class="hw-card-role">Always-on · Persistence node</div>
+      <div class="hw-spec"><strong>CPU</strong> i5-7x00T · 4c/4t</div>
+      <div class="hw-spec"><strong>RAM</strong> Upgrade to 32GB DDR4</div>
+      <div class="hw-spec"><strong>GPU</strong> None (no PCIe slot)</div>
+      <div class="hw-spec"><strong>OS</strong> Ubuntu Server 24</div>
+      <div class="hw-runs">
+        <div class="hw-runs-label">Runs</div>
+        <span class="hw-pill">MemoryAgent</span>
+        <span class="hw-pill">Qdrant vector DB</span>
+        <span class="hw-pill">SchedulerAgent</span>
+        <span class="hw-pill">Redis task queue</span>
+        <span class="hw-pill">Audit log store</span>
+        <span class="hw-pill">Tailscale client</span>
+      </div>
+    </div>
+
+    <div class="hw-card m710b">
+      <div class="hw-card-name">M710q-B</div>
+      <div class="hw-card-role">Always-on · Execution node</div>
+      <div class="hw-spec"><strong>CPU</strong> i5-7x00T · 4c/4t</div>
+      <div class="hw-spec"><strong>RAM</strong> 16–32GB DDR4</div>
+      <div class="hw-spec"><strong>GPU</strong> None (no PCIe slot)</div>
+      <div class="hw-spec"><strong>OS</strong> Ubuntu Server 24</div>
+      <div class="hw-runs">
+        <div class="hw-runs-label">Runs</div>
+        <span class="hw-pill">BrowserAgent (Playwright)</span>
+        <span class="hw-pill">OpsAgent</span>
+        <span class="hw-pill">Docker monitor</span>
+        <span class="hw-pill">Tailscale client</span>
+      </div>
+    </div>
+
+    <div class="hw-card cloud">
+      <div class="hw-card-name">Cloud APIs</div>
+      <div class="hw-card-role">LLM backend · Frontier reasoning</div>
+      <div class="hw-spec"><strong>Primary</strong> Claude / GPT-4o</div>
+      <div class="hw-spec"><strong>Router</strong> OpenRouter</div>
+      <div class="hw-spec"><strong>Local fallback</strong> Ollama GPU on KILO</div>
+      <div class="hw-spec"><strong>Private data</strong> Never sent here</div>
+      <div class="hw-runs">
+        <div class="hw-runs-label">Handles</div>
+        <span class="hw-pill">Complex planning</span>
+        <span class="hw-pill">Frontier code gen</span>
+        <span class="hw-pill">Public research</span>
+        <span class="hw-pill">High-reasoning tasks</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── MICRO-LOOP ── -->
+<div class="loop-section">
+  <div class="section-title">Micro-Loop — This Task Step by Step</div>
+  <div class="section-sub">"Research competitors, push report to repo, schedule weekly refresh"</div>
+  <div class="loop-steps">
+    <div></div>
+    <div class="loop-body">
+
+      <div class="lstep">
+        <div class="lnum ln-kilo">CLI</div>
+        <div class="lcontent">
+          <div class="lactor kilo">You → CLI on KILO</div>
+          <div class="ldesc">Type the request. CLI passes it to the Runtime with session context.</div>
+        </div>
+      </div>
+
+      <div class="lstep">
+        <div class="lnum ln-kilo">RT</div>
+        <div class="lcontent">
+          <div class="lactor kilo">Runtime → Model Router (KILO)</div>
+          <div class="ldesc">No private data in this task. Research + planning → routes to Cloud API.</div>
+          <div class="lroute to-cloud">→ Cloud API (Claude / GPT-4o via OpenRouter)</div>
+        </div>
+      </div>
+
+      <div class="lstep">
+        <div class="lnum ln-cloud">LLM</div>
+        <div class="lcontent">
+          <div class="lactor cloud">Cloud LLM → Runtime (tool request)</div>
+          <div class="ldesc">Reads task + research_workflow Skill. First step: search competitors.</div>
+          <div class="lcode">mcp://browser/search({ query: "Examiner.Sable competitors wholesale real estate 2025" })</div>
+        </div>
+      </div>
+
+      <div class="lstep">
+        <div class="lnum ln-m710a">B</div>
+        <div class="lcontent">
+          <div class="lactor m710a">Runtime → BrowserAgent MCP (M710q-B)</div>
+          <div class="ldesc">Dispatched over Tailscale to M710q-B. Playwright runs the search. KILO untouched.</div>
+          <div class="lresult">→ Returns: [ {title: "PropStream", ...}, {title: "DealMachine", ...}, ... ]</div>
+        </div>
+      </div>
+
+      <div class="lstep">
+        <div class="lnum ln-cloud">LLM</div>
+        <div class="lcontent">
+          <div class="lactor cloud">Cloud LLM → Runtime (memory query)</div>
+          <div class="ldesc">Checks if we've analyzed these competitors before.</div>
+          <div class="lcode">mcp://rag/query({ q: "previous competitor analysis Examiner.Sable" })</div>
+        </div>
+      </div>
+
+      <div class="lstep">
+        <div class="lnum ln-m710a">M</div>
+        <div class="lcontent">
+          <div class="lactor m710a">Runtime → MemoryAgent (M710q-A)</div>
+          <div class="ldesc">Qdrant query over Tailscale. Returns prior context.</div>
+          <div class="lresult">→ Returns: "Previous analysis 2025-01-14: PropStream reviewed. DealMachine not yet covered."</div>
+        </div>
+      </div>
+
+      <div class="lstep">
+        <div class="lnum ln-local">LLM</div>
+        <div class="lcontent">
+          <div class="lactor local">Model Router switches → Ollama GPU (KILO)</div>
+          <div class="ldesc">Report writing will reference local file paths. Router hard-switches to local GPU model.</div>
+          <div class="lroute to-local">→ Ollama on RTX 3060 · ~40–50 tok/s · data never leaves KILO</div>
+          <div class="lcode">fs.write({ path: "docs/competitor-analysis.md", content: "..." })</div>
+        </div>
+      </div>
+
+      <div class="lstep">
+        <div class="lnum ln-kilo">RT</div>
+        <div class="lcontent">
+          <div class="lactor kilo">Runtime → Local Plugins (KILO)</div>
+          <div class="ldesc">fs.write runs locally. Then git commit + push.</div>
+          <div class="lcode">git.commit({ msg: "add competitor analysis" }) → git.push()</div>
+          <div class="lresult">→ Returns: { written: true, pushed: true, commit: "a3f92c1" }</div>
+        </div>
+      </div>
+
+      <div class="lstep">
+        <div class="lnum ln-cloud">LLM</div>
+        <div class="lcontent">
+          <div class="lactor cloud">Cloud LLM → Runtime (schedule job)</div>
+          <div class="ldesc">Back to cloud for scheduling decision. No private data involved.</div>
+          <div class="lcode">mcp://scheduler/queue({ task: "competitor_research", cron: "0 9 * * MON" })</div>
+        </div>
+      </div>
+
+      <div class="lstep">
+        <div class="lnum ln-m710a">S</div>
+        <div class="lcontent">
+          <div class="lactor m710a">Runtime → SchedulerAgent (M710q-A)</div>
+          <div class="ldesc">Queued in Redis on M710q-A. Fires every Monday 9AM — even if KILO is off.</div>
+          <div class="lresult">→ Returns: { scheduled: true, next_run: "2026-02-23T09:00:00" }</div>
+        </div>
+      </div>
+
+      <div class="lstep">
+        <div class="lnum ln-done">✓</div>
+        <div class="lcontent">
+          <div class="lactor done">Final Output → CLI on KILO</div>
+          <div class="ldesc">Task complete. Confirmation printed to your terminal.</div>
+          <div class="lresult">→ "Done — competitor analysis pushed (commit a3f92c1). Weekly refresh scheduled every Monday 9AM."</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- KEY -->
+<div class="key">
+  <div class="ki"><span class="kdot" style="background:var(--kilo)"></span>KILO (primary)</div>
+  <div class="ki"><span class="kdot" style="background:var(--m710a)"></span>M710q-A (persistence)</div>
+  <div class="ki"><span class="kdot" style="background:var(--m710b)"></span>M710q-B (execution)</div>
+  <div class="ki"><span class="kdot" style="background:var(--cloud)"></span>Cloud LLM</div>
+  <div class="ki"><span class="kdot" style="background:var(--local-llm)"></span>Ollama GPU (private data)</div>
+  <div class="ki"><span class="kdot" style="background:var(--skill)"></span>Skills</div>
+  <div class="ki"><span class="kdot" style="background:var(--plugin)"></span>Plugins</div>
+  <div class="ki"><span class="kdot" style="background:var(--mcp)"></span>MCP servers</div>
+</div>
+
+</div>
+</body>
+</html>
