@@ -58,5 +58,12 @@
   },
   "peerDependencies": {
     "openclaw": ">=2026.2.13"
+  },
+  "scripts": {
+    "dev": "tsx scripts/diagnose.ts",
+    "lint": "tsc --noEmit",
+    "test": "pnpm lint",
+    "build": "tsc --noEmit false",
+    "start": "node dist/scripts/diagnose.js"
   }
 }
