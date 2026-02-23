@@ -2,24 +2,41 @@
 @tailwind components;
 @tailwind utilities;
 
-/* --- Dark Glass Design Tokens --- */
+/* --- Obsidian + Ember Gold Design Tokens --- */
 :root {
+  /* ── Backgrounds ── */
   --bg-base: #1c1b1a;
   --bg-image-overlay: rgba(0, 0, 0, 0.6);
   --surface-glass-1: rgba(255, 255, 255, 0.08);
   --surface-glass-2: rgba(255, 255, 255, 0.14);
   --surface-glass-3: rgba(255, 255, 255, 0.20);
   --backdrop-blur: 24px;
+
+  /* ── Typography ── */
   --text-primary: #eae9e9;
   --text-secondary: #b0afae;
   --text-muted: #666564;
-  --accent-primary: #e6dbcb;
+
+  /* ── Ember Gold Accent ── */
+  --ember: #d4a054;
+  --ember-light: #e6b76a;
+  --ember-dim: #9c7840;
+  --accent-primary: var(--ember-light);
+
+  /* ── Borders ── */
   --border-subtle: rgba(255, 255, 255, 0.10);
   --border-medium: rgba(255, 255, 255, 0.18);
+  --border-ember: rgba(212, 160, 84, 0.45);
+
+  /* ── Radii ── */
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 16px;
+
+  /* ── Spacing ── */
   --spacing-base: 8px;
+
+  /* ── Transitions ── */
   --transition-fast: 180ms ease-out;
   --transition-med: 260ms ease-out;
 }
@@ -203,6 +220,8 @@ input, textarea, [contenteditable="true"] {
 
 /* ── Titlebar Kanban Toggle ────────────────────────────── */
 .titlebar-button--kanban.active {
-  background: rgba(255, 255, 255, 0.10);
-  color: #e6dbcb;
+  background: rgba(212, 160, 84, 0.12);
+  color: var(--ember-light);
+  border-bottom: 2px solid var(--ember);
+  box-shadow: 0 1px 6px rgba(212, 160, 84, 0.18);
 }

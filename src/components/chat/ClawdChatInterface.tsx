@@ -279,14 +279,19 @@ export function ClawdChatInterface() {
 
   return (
     <div className="mx-auto flex h-full w-full max-w-4xl flex-col px-6 py-10">
-      <div className="mb-6 flex items-center justify-center gap-3 text-[#e6dbcb]">
-        <Sparkles className="h-7 w-7" aria-hidden="true" />
+      <div className="mb-6 flex items-center justify-center gap-3" style={{ color: 'var(--ember-light)' }}>
+        <Sparkles className="h-7 w-7" style={{ color: 'var(--ember)' }} aria-hidden="true" />
         <h1 style={{ fontFamily: 'Recoleta, "Times New Roman", serif' }} className="text-5xl">
           Good evening, James
         </h1>
       </div>
 
-      <div className="mb-4 text-center text-xs text-muted-foreground">{connectionLabel}</div>
+      <div
+        className="mb-4 text-center text-xs"
+        style={{ color: isConnected ? 'var(--ember)' : 'var(--text-muted)' }}
+      >
+        {connectionLabel}
+      </div>
 
       <ScrollArea className="mb-5 flex-1 rounded-xl border border-[#4a4947] bg-[#252422]/40 p-4">
         <div className="space-y-3">
