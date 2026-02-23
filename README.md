@@ -8,6 +8,15 @@ Feishu/Lark (飞书) channel plugin for [OpenClaw](https://github.com/openclaw/o
 
 [English](#english) | [中文](#中文)
 
+## Integration hardening docs
+
+- [Stack map](./docs/stack-map.md)
+- [Topology decision](./docs/topology-decision.md)
+- [Build/run matrix](./docs/build-run-matrix.md)
+- [Interfaces contract](./docs/interfaces.md)
+- [Observability guide](./docs/log-guide.md)
+- [E2E verification checklist](./docs/e2e-verification-checklist.md)
+
 ---
 
 ## English
