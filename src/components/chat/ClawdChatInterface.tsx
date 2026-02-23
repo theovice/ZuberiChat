@@ -1,9 +1,10 @@
-import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from 'react';
+import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useWebSocket, type WebSocketMessage } from '@/hooks/useWebSocket';
+import { ConnectionStatus } from '@/components/chat/ConnectionStatus';
 
 type ChatRole = 'user' | 'assistant';
 
@@ -97,7 +98,7 @@ export function ClawdChatInterface() {
       });
   }, []);
 
-  const { send } = useWebSocket({
+  const { send, connectionState } = useWebSocket({
     autoConnect: gatewayToken !== null,
     url: 'ws://127.0.0.1:18789',
     onOpen: gatewayToken ? buildConnectRequest(gatewayToken) : undefined,
@@ -226,6 +227,13 @@ export function ClawdChatInterface() {
     node.style.height = `${Math.min(node.scrollHeight, 220)}px`;
   }, [draft]);
 
+  // Map WebSocket connectionState to ConnectionStatus prop
+  const connStatus = useMemo<'connecting' | 'connected' | 'disconnected'>(() => {
+    if (connectionState === 'connected') return 'connected';
+    if (connectionState === 'connecting' || connectionState === 'reconnecting') return 'connecting';
+    return 'disconnected';
+  }, [connectionState]);
+
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
     const message = draft.trim();
@@ -271,6 +279,7 @@ export function ClawdChatInterface() {
 
   return (
     <div className="mx-auto flex h-full w-full max-w-4xl flex-col px-6 py-4">
+      <ConnectionStatus status={connStatus} />
       <ScrollArea className="mb-5 flex-1 rounded-xl border border-[#4a4947] bg-[#252422]/40 p-4">
         <div className="space-y-3">
           {messages.length === 0 ? (
