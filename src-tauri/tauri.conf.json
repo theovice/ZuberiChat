@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "ZuberiChat",
+  "productName": "Zuberi",
   "version": "0.1.0",
   "identifier": "com.zuberichat.app",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "ZuberiChat",
+        "title": "Zuberi",
         "width": 1280,
         "height": 800,
         "resizable": true,
