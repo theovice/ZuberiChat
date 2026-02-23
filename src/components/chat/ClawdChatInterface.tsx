@@ -1,6 +1,5 @@
-import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -98,7 +97,7 @@ export function ClawdChatInterface() {
       });
   }, []);
 
-  const { send, isConnected, connectionState } = useWebSocket({
+  const { send } = useWebSocket({
     autoConnect: gatewayToken !== null,
     url: 'ws://127.0.0.1:18789',
     onOpen: gatewayToken ? buildConnectRequest(gatewayToken) : undefined,
@@ -227,13 +226,6 @@ export function ClawdChatInterface() {
     node.style.height = `${Math.min(node.scrollHeight, 220)}px`;
   }, [draft]);
 
-  const connectionLabel = useMemo(() => {
-    if (isConnected) return 'Connected to OpenClaw';
-    if (connectionState === 'reconnecting') return 'Reconnecting to OpenClaw…';
-    if (connectionState === 'connecting') return 'Connecting to OpenClaw…';
-    return 'Disconnected from OpenClaw';
-  }, [connectionState, isConnected]);
-
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
     const message = draft.trim();
@@ -278,21 +270,7 @@ export function ClawdChatInterface() {
   };
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-4xl flex-col px-6 py-10">
-      <div className="mb-6 flex items-center justify-center gap-3" style={{ color: 'var(--ember-light)' }}>
-        <Sparkles className="h-7 w-7" style={{ color: 'var(--ember)' }} aria-hidden="true" />
-        <h1 style={{ fontFamily: 'Recoleta, "Times New Roman", serif' }} className="text-5xl">
-          Good evening, James
-        </h1>
-      </div>
-
-      <div
-        className="mb-4 text-center text-xs"
-        style={{ color: isConnected ? 'var(--ember)' : 'var(--text-muted)' }}
-      >
-        {connectionLabel}
-      </div>
-
+    <div className="mx-auto flex h-full w-full max-w-4xl flex-col px-6 py-4">
       <ScrollArea className="mb-5 flex-1 rounded-xl border border-[#4a4947] bg-[#252422]/40 p-4">
         <div className="space-y-3">
           {messages.length === 0 ? (
