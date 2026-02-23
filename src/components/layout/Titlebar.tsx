@@ -1,10 +1,15 @@
 import { useState, useEffect } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Minus, Square, X, Maximize2 } from "lucide-react";
+import { Minus, Square, X, Maximize2, LayoutPanelRight } from "lucide-react";
 
 const appWindow = getCurrentWindow();
 
-export function Titlebar() {
+interface TitlebarProps {
+  isPanelOpen?: boolean;
+  onTogglePanel?: () => void;
+}
+
+export function Titlebar({ isPanelOpen = false, onTogglePanel }: TitlebarProps) {
   const [isMaximized, setIsMaximized] = useState(false);
 
   useEffect(() => {
@@ -39,6 +44,16 @@ export function Titlebar() {
       </div>
 
       <div className="titlebar-controls">
+        {/* Kanban panel toggle */}
+        <button
+          className={`titlebar-button titlebar-button--kanban${isPanelOpen ? " active" : ""}`}
+          onClick={onTogglePanel}
+          aria-label={isPanelOpen ? "Close Kanban panel" : "Open Kanban panel"}
+          title="Toggle Kanban"
+        >
+          <LayoutPanelRight size={15} />
+        </button>
+
         <button
           className="titlebar-button titlebar-button--minimize"
           onClick={handleMinimize}

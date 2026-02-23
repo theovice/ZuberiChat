@@ -18,8 +18,10 @@
     "forceConsistentCasingInFileNames": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@kanban/*": ["./apps/veritas-kanban/web/src/*"],
+      "@veritas-kanban/shared": ["./apps/veritas-kanban/shared/src/index.ts"]
     }
   },
-  "include": ["src"]
+  "include": ["src", "apps/veritas-kanban"]
 }

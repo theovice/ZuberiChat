@@ -1,7 +1,14 @@
+import { useCallback, useState } from "react";
 import { Titlebar } from "./components/layout/Titlebar";
-import { ClawdChatInterface } from "./components/chat/ClawdChatInterface";
+import { PanelLayout } from "./components/layout/PanelLayout";
 
 export default function App() {
+  const [isPanelOpen, setIsPanelOpen] = useState(false);
+
+  const handleTogglePanel = useCallback(() => {
+    setIsPanelOpen((prev) => !prev);
+  }, []);
+
   return (
     <div
       style={{
@@ -12,9 +19,9 @@ export default function App() {
         background: "var(--bg-base)",
       }}
     >
-      <Titlebar />
+      <Titlebar isPanelOpen={isPanelOpen} onTogglePanel={handleTogglePanel} />
       <div style={{ marginTop: "36px", flex: 1, overflow: "hidden" }}>
-        <ClawdChatInterface />
+        <PanelLayout isPanelOpen={isPanelOpen} />
       </div>
     </div>
   );
