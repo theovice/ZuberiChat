@@ -15,6 +15,36 @@ type ChatMessage = {
 
 const ACTIONS = ['</> Code', 'Strategize', 'Create', 'Write', 'Learn'] as const;
 
+const OPENCLAW_AUTH_TOKEN = 'h1UljD9W9ohcXvRY2ld/zTbJ6n0kTJtRbxizh3OnUss=';
+
+function buildConnectRequest(nonce?: string): WebSocketMessage {
+  return {
+    type: 'req',
+    id: crypto.randomUUID(),
+    method: 'connect',
+    params: {
+      minProtocol: 3,
+      maxProtocol: 3,
+      client: {
+        id: 'zuberi-desktop',
+        displayName: 'Zuberi',
+        version: '0.1.0',
+        platform: 'windows',
+        mode: 'operator',
+      },
+      role: 'operator',
+      scopes: ['operator.read', 'operator.write'],
+      caps: [],
+      commands: [],
+      permissions: {},
+      auth: {
+        token: OPENCLAW_AUTH_TOKEN,
+      },
+      ...(nonce ? { device: { nonce } } : {}),
+    },
+  };
+}
+
 function extractAssistantChunk(message: WebSocketMessage): string | null {
   const chunk =
     message.delta ??
@@ -35,10 +65,35 @@ export function ClawdChatInterface() {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const streamingMessageIdRef = useRef<string | null>(null);
 
+  const handshakeCompleteRef = useRef(false);
+
   const { send, isConnected, connectionState } = useWebSocket({
     autoConnect: true,
     url: 'ws://localhost:18789',
+    onConnected: () => {
+      handshakeCompleteRef.current = false;
+    },
     onMessage: (message) => {
+      // Step 1: Handle connect.challenge from gateway
+      if (message.type === 'event' && message.event === 'connect.challenge') {
+        const payload = message.payload as Record<string, unknown> | undefined;
+        const nonce = typeof payload?.nonce === 'string' ? payload.nonce : undefined;
+        send(buildConnectRequest(nonce));
+        return;
+      }
+
+      // Step 2: Handle connect response (hello-ok or error)
+      if (message.type === 'res' && !handshakeCompleteRef.current) {
+        if (message.ok) {
+          handshakeCompleteRef.current = true;
+          console.info('[OpenClaw] Gateway handshake complete');
+        } else {
+          console.error('[OpenClaw] Gateway handshake failed:', message.error);
+        }
+        return;
+      }
+
+      // Step 3: Normal message handling — extract streaming chunks
       const nextChunk = extractAssistantChunk(message);
       if (!nextChunk) return;
 
