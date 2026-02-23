@@ -7,3 +7,5 @@
 .DS_Store
 **/target
 src-tauri/gen
+.openclaw.local.json
+*.local.json

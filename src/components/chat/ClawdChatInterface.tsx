@@ -1,4 +1,5 @@
 import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -15,9 +16,7 @@ type ChatMessage = {
 
 const ACTIONS = ['</> Code', 'Strategize', 'Create', 'Write', 'Learn'] as const;
 
-const OPENCLAW_AUTH_TOKEN = 'h1UljD9W9ohcXvRY2ld/zTbJ6n0kTJtRbxizh3OnUss=';
-
-function buildConnectRequest(nonce?: string): WebSocketMessage {
+function buildConnectRequest(token: string, nonce?: string): WebSocketMessage {
   return {
     type: 'req',
     id: crypto.randomUUID(),
@@ -37,9 +36,7 @@ function buildConnectRequest(nonce?: string): WebSocketMessage {
       caps: [],
       commands: [],
       permissions: {},
-      auth: {
-        token: OPENCLAW_AUTH_TOKEN,
-      },
+      auth: { token },
       ...(nonce ? { device: { nonce } } : {}),
     },
   };
@@ -62,13 +59,28 @@ function extractAssistantChunk(message: WebSocketMessage): string | null {
 export function ClawdChatInterface() {
   const [draft, setDraft] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [gatewayToken, setGatewayToken] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const streamingMessageIdRef = useRef<string | null>(null);
-
   const handshakeCompleteRef = useRef(false);
+  const gatewayTokenRef = useRef<string | null>(null);
+  const sendRef = useRef<(msg: WebSocketMessage) => void>(() => {});
+
+  // Load token from .openclaw.local.json via Tauri IPC on mount
+  useEffect(() => {
+    invoke<string>('read_gateway_token')
+      .then((token) => {
+        gatewayTokenRef.current = token;
+        setGatewayToken(token);
+        console.info('[OpenClaw] Gateway token loaded');
+      })
+      .catch((err) => {
+        console.error('[OpenClaw] Failed to load gateway token:', err);
+      });
+  }, []);
 
   const { send, isConnected, connectionState } = useWebSocket({
-    autoConnect: true,
+    autoConnect: gatewayToken !== null,
     url: 'ws://localhost:18789',
     onConnected: () => {
       handshakeCompleteRef.current = false;
@@ -76,9 +88,14 @@ export function ClawdChatInterface() {
     onMessage: (message) => {
       // Step 1: Handle connect.challenge from gateway
       if (message.type === 'event' && message.event === 'connect.challenge') {
+        const token = gatewayTokenRef.current;
+        if (!token) {
+          console.error('[OpenClaw] Received challenge but no token loaded');
+          return;
+        }
         const payload = message.payload as Record<string, unknown> | undefined;
         const nonce = typeof payload?.nonce === 'string' ? payload.nonce : undefined;
-        send(buildConnectRequest(nonce));
+        sendRef.current(buildConnectRequest(token, nonce));
         return;
       }
 
@@ -112,6 +129,11 @@ export function ClawdChatInterface() {
       });
     },
   });
+
+  // Keep sendRef in sync so the onMessage callback can use it
+  useEffect(() => {
+    sendRef.current = send;
+  }, [send]);
 
   useEffect(() => {
     const node = textareaRef.current;
