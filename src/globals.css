@@ -1,3 +1,64 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ── Custom Titlebar ───────────────────────────────────── */
+
+.titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 36px;
+  background: #1a1a2e;
+  color: #e0e0e0;
+  user-select: none;
+  -webkit-user-select: none;
+  flex-shrink: 0;
+  padding-left: 12px;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+.titlebar-title {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+  color: #a0a0c0;
+}
+
+.titlebar-controls {
+  display: flex;
+  height: 100%;
+}
+
+.titlebar-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 100%;
+  border: none;
+  background: transparent;
+  color: #a0a0c0;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+  outline: none;
+}
+
+.titlebar-button:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+
+.titlebar-button:active {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.titlebar-button--close:hover {
+  background: #e81123;
+  color: #ffffff;
+}
+
+.titlebar-button--close:active {
+  background: #c50f1f;
+}
