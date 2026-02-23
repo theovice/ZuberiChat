@@ -2,6 +2,92 @@
 @tailwind components;
 @tailwind utilities;
 
+/* --- Dark Glass Design Tokens --- */
+:root {
+  --bg-base: #1c1b1a;
+  --bg-image-overlay: rgba(0, 0, 0, 0.6);
+  --surface-glass-1: rgba(255, 255, 255, 0.08);
+  --surface-glass-2: rgba(255, 255, 255, 0.14);
+  --surface-glass-3: rgba(255, 255, 255, 0.20);
+  --backdrop-blur: 24px;
+  --text-primary: #eae9e9;
+  --text-secondary: #b0afae;
+  --text-muted: #666564;
+  --accent-primary: #e6dbcb;
+  --border-subtle: rgba(255, 255, 255, 0.10);
+  --border-medium: rgba(255, 255, 255, 0.18);
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --spacing-base: 8px;
+  --transition-fast: 180ms ease-out;
+  --transition-med: 260ms ease-out;
+}
+
+/* --- Global Resets --- */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+               Roboto, Helvetica, Arial, sans-serif;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: default;
+}
+
+input, textarea, [contenteditable="true"] {
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+}
+
+/* --- Scrollbars --- */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* --- Glass Surface Utility Classes --- */
+.glass-1 {
+  background: var(--surface-glass-1);
+  backdrop-filter: blur(var(--backdrop-blur));
+  -webkit-backdrop-filter: blur(var(--backdrop-blur));
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.glass-2 {
+  background: var(--surface-glass-2);
+  backdrop-filter: blur(var(--backdrop-blur));
+  -webkit-backdrop-filter: blur(var(--backdrop-blur));
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-md);
+}
+
 /* ── Custom Titlebar ───────────────────────────────────── */
 
 .titlebar {

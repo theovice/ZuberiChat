@@ -9,11 +9,11 @@ export default function App() {
         height: "100vh",
         display: "flex",
         flexDirection: "column",
-        overflow: "hidden",
+        background: "var(--bg-base)",
       }}
     >
       <Titlebar />
-      <div style={{ flex: 1, overflow: "hidden" }}>
+      <div style={{ marginTop: "36px", flex: 1, overflow: "hidden" }}>
         <ClawdChatInterface />
       </div>
     </div>
