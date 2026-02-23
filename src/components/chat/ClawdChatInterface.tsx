@@ -16,7 +16,7 @@ type ChatMessage = {
 
 const ACTIONS = ['</> Code', 'Strategize', 'Create', 'Write', 'Learn'] as const;
 
-function buildConnectRequest(token: string, nonce?: string): WebSocketMessage {
+function buildConnectRequest(token: string): WebSocketMessage {
   return {
     type: 'req',
     id: crypto.randomUUID(),
@@ -25,19 +25,16 @@ function buildConnectRequest(token: string, nonce?: string): WebSocketMessage {
       minProtocol: 3,
       maxProtocol: 3,
       client: {
-        id: 'zuberi-desktop',
+        id: 'gateway-client',
         displayName: 'Zuberi',
         version: '0.1.0',
         platform: 'windows',
-        mode: 'operator',
+        mode: 'ui',
       },
       role: 'operator',
       scopes: ['operator.read', 'operator.write'],
       caps: [],
-      commands: [],
-      permissions: {},
       auth: { token },
-      ...(nonce ? { device: { nonce } } : {}),
     },
   };
 }
@@ -82,24 +79,12 @@ export function ClawdChatInterface() {
   const { send, isConnected, connectionState } = useWebSocket({
     autoConnect: gatewayToken !== null,
     url: 'ws://127.0.0.1:18789',
+    onOpen: gatewayToken ? buildConnectRequest(gatewayToken) : undefined,
     onConnected: () => {
       handshakeCompleteRef.current = false;
     },
     onMessage: (message) => {
-      // Step 1: Handle connect.challenge from gateway
-      if (message.type === 'event' && message.event === 'connect.challenge') {
-        const token = gatewayTokenRef.current;
-        if (!token) {
-          console.error('[OpenClaw] Received challenge but no token loaded');
-          return;
-        }
-        const payload = message.payload as Record<string, unknown> | undefined;
-        const nonce = typeof payload?.nonce === 'string' ? payload.nonce : undefined;
-        sendRef.current(buildConnectRequest(token, nonce));
-        return;
-      }
-
-      // Step 2: Handle connect response (hello-ok or error)
+      // Step 1: Handle connect response (hello-ok or error)
       if (message.type === 'res' && !handshakeCompleteRef.current) {
         if (message.ok) {
           handshakeCompleteRef.current = true;
@@ -107,6 +92,17 @@ export function ClawdChatInterface() {
         } else {
           console.error('[OpenClaw] Gateway handshake failed:', message.error);
         }
+        return;
+      }
+
+      // Step 2: Handle connect.challenge — respond with connect request
+      if (message.type === 'event' && message.event === 'connect.challenge') {
+        const token = gatewayTokenRef.current;
+        if (!token) {
+          console.error('[OpenClaw] Received challenge but no token loaded');
+          return;
+        }
+        sendRef.current(buildConnectRequest(token));
         return;
       }
 
@@ -130,10 +126,8 @@ export function ClawdChatInterface() {
     },
   });
 
-  // Keep sendRef in sync so the onMessage callback can use it
-  useEffect(() => {
-    sendRef.current = send;
-  }, [send]);
+  // Keep sendRef in sync for challenge-response fallback
+  sendRef.current = send;
 
   useEffect(() => {
     const node = textareaRef.current;
