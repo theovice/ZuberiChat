@@ -3,32 +3,47 @@ import react from "@vitejs/plugin-react";
 import path from "path";
 
 // ---------------------------------------------------------------------------
-// Kanban alias-rewrite plugin
+// Paths
 // ---------------------------------------------------------------------------
-// The Kanban source tree uses `@/` to mean *its own* src/ directory.
-// Zuberi's root `@/` maps to `./src`.  When Vite resolves an import from a
-// file *inside* the Kanban tree, we rewrite `@/` to `@kanban/` so it resolves
-// to `apps/veritas-kanban/web/src/` instead.
-// ---------------------------------------------------------------------------
+const ZUBERI_SRC = path.resolve(__dirname, "src");
 const KANBAN_SRC = path.resolve(__dirname, "apps/veritas-kanban/web/src");
+const SHARED_SRC = path.resolve(__dirname, "apps/veritas-kanban/shared/src");
 
-function kanbanAliasRewrite(): Plugin {
+// ---------------------------------------------------------------------------
+// Smart @ alias plugin
+// ---------------------------------------------------------------------------
+// Both Zuberi and the Kanban source tree use `@/` as a path alias, but they
+// point to *different* directories:
+//   - Zuberi files  →  @/ means  ./src/
+//   - Kanban files  →  @/ means  ./apps/veritas-kanban/web/src/
+//
+// Vite's built-in `resolve.alias` can only map `@` to ONE directory, so we
+// handle it ourselves in a plugin. When the importer lives inside the Kanban
+// tree we resolve `@/` against KANBAN_SRC; otherwise against ZUBERI_SRC.
+// ---------------------------------------------------------------------------
+function smartAtAlias(): Plugin {
+  const kanbanNorm = KANBAN_SRC.replace(/\\/g, "/");
+
   return {
-    name: "kanban-alias-rewrite",
+    name: "smart-at-alias",
     enforce: "pre",
     resolveId(source, importer) {
-      if (!importer) return null;
+      if (!source.startsWith("@/")) return null;
 
-      // Normalize to forward slashes for cross-platform comparison
-      const importerNorm = importer.replace(/\\/g, "/");
-      const kanbanNorm = KANBAN_SRC.replace(/\\/g, "/");
+      const suffix = source.slice(2); // strip "@/"
 
-      if (importerNorm.startsWith(kanbanNorm) && source.startsWith("@/")) {
-        return this.resolve(source.replace("@/", "@kanban/"), importer, {
-          skipSelf: true,
-        });
+      if (importer) {
+        const importerNorm = importer.replace(/\\/g, "/");
+        if (importerNorm.startsWith(kanbanNorm)) {
+          // Importer is inside the Kanban source tree → resolve to Kanban src
+          const resolved = path.resolve(KANBAN_SRC, suffix);
+          return this.resolve(resolved, importer, { skipSelf: true });
+        }
       }
-      return null;
+
+      // Default: resolve to Zuberi src
+      const resolved = path.resolve(ZUBERI_SRC, suffix);
+      return this.resolve(resolved, importer, { skipSelf: true });
     },
   };
 }
@@ -41,19 +56,15 @@ function kanbanAliasRewrite(): Plugin {
 // raw TS source, so this plugin strips the trailing `.js` (Vite then finds
 // the `.ts` file via normal resolution).
 // ---------------------------------------------------------------------------
-const SHARED_SRC = path.resolve(
-  __dirname,
-  "apps/veritas-kanban/shared/src",
-);
-
 function sharedJsToTsPlugin(): Plugin {
+  const sharedNorm = SHARED_SRC.replace(/\\/g, "/");
+
   return {
     name: "shared-js-to-ts",
     enforce: "pre",
     resolveId(source, importer) {
       if (!importer) return null;
       const importerNorm = importer.replace(/\\/g, "/");
-      const sharedNorm = SHARED_SRC.replace(/\\/g, "/");
 
       if (importerNorm.startsWith(sharedNorm) && source.endsWith(".js")) {
         const tsSource = source.replace(/\.js$/, "");
@@ -68,14 +79,14 @@ function sharedJsToTsPlugin(): Plugin {
 // Vite config
 // ---------------------------------------------------------------------------
 export default defineConfig({
-  plugins: [kanbanAliasRewrite(), sharedJsToTsPlugin(), react()],
+  plugins: [smartAtAlias(), sharedJsToTsPlugin(), react()],
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src"),
-      "@kanban": path.resolve(__dirname, "apps/veritas-kanban/web/src"),
+      // NOTE: "@" is NOT listed here — handled by smartAtAlias() plugin above.
+      "@kanban": KANBAN_SRC,
       "@veritas-kanban/shared": path.resolve(
-        __dirname,
-        "apps/veritas-kanban/shared/src/index.ts",
+        SHARED_SRC,
+        "index.ts",
       ),
     },
   },
