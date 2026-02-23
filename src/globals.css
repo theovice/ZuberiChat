@@ -122,8 +122,8 @@ input, textarea, [contenteditable="true"] {
   align-items: center;
   justify-content: space-between;
   height: 36px;
-  background: #1a1a2e;
-  color: #e0e0e0;
+  background: #0e0d0c;
+  color: var(--text-secondary);
   user-select: none;
   -webkit-user-select: none;
   flex-shrink: 0;
@@ -136,7 +136,7 @@ input, textarea, [contenteditable="true"] {
   font-weight: 600;
   letter-spacing: 0.02em;
   pointer-events: none;
-  color: #a0a0c0;
+  color: var(--text-muted);
 }
 
 .titlebar-controls {
@@ -152,7 +152,7 @@ input, textarea, [contenteditable="true"] {
   height: 100%;
   border: none;
   background: transparent;
-  color: #a0a0c0;
+  color: var(--text-muted);
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease;
   outline: none;
@@ -234,4 +234,12 @@ input, textarea, [contenteditable="true"] {
   color: var(--ember-light);
   border-bottom: 2px solid var(--ember);
   box-shadow: 0 1px 6px var(--ember-glow);
+}
+
+/* ── Ghost Messages — hidden scrollbar ────────────────── */
+.ghost-messages::-webkit-scrollbar {
+  display: none;
+}
+.ghost-messages {
+  scrollbar-width: none;
 }

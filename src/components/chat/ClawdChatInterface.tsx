@@ -2,7 +2,6 @@ import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from '
 import { invoke } from '@tauri-apps/api/core';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { useWebSocket, type WebSocketMessage } from '@/hooks/useWebSocket';
 import { ConnectionStatus } from '@/components/chat/ConnectionStatus';
 
@@ -280,26 +279,33 @@ export function ClawdChatInterface() {
   return (
     <div className="mx-auto flex h-full w-full max-w-4xl flex-col px-6 py-4">
       <ConnectionStatus status={connStatus} />
-      <ScrollArea className="mb-5 flex-1 rounded-xl border border-[#4a4947] bg-[#252422]/40 p-4">
-        <div className="space-y-3">
+      <div className="ghost-messages mb-4 flex-1 overflow-y-auto px-4" style={{ background: 'transparent' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
           {messages.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Your conversation with OpenClaw will appear here.</p>
+            <p style={{ color: '#3a3836', textAlign: 'center', fontSize: '0.9rem', paddingTop: '2rem' }}>
+              Your conversation with OpenClaw will appear here.
+            </p>
           ) : (
             messages.map((message) => (
               <div
                 key={message.id}
-                className={
-                  message.role === 'user'
-                    ? 'ml-auto max-w-[85%] rounded-lg border border-[#4a4947] bg-[#31302e] px-3 py-2 text-sm text-[#e6dbcb]'
-                    : 'max-w-[85%] rounded-lg border border-[#4a4947] bg-[#2b2a28] px-3 py-2 text-sm text-[#d3c8b7]'
-                }
+                style={{
+                  textAlign: message.role === 'user' ? 'right' : 'left',
+                  color: message.role === 'user' ? '#f0a020' : '#eae9e9',
+                  fontSize: '0.9rem',
+                  lineHeight: 1.6,
+                  maxWidth: '85%',
+                  alignSelf: message.role === 'user' ? 'flex-end' : 'flex-start',
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                }}
               >
                 {message.content}
               </div>
             ))
           )}
         </div>
-      </ScrollArea>
+      </div>
 
       <form onSubmit={handleSubmit} className="space-y-3">
         <div className="rounded-xl border border-[#4a4947] bg-[#31302e] p-3">
