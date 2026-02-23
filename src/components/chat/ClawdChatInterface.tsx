@@ -2,13 +2,6 @@ import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from '
 import { Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useWebSocket, type WebSocketMessage } from '@/hooks/useWebSocket';
 
@@ -20,7 +13,6 @@ type ChatMessage = {
   content: string;
 };
 
-const MODEL_OPTIONS = ['Claude 3.5 Sonnet', 'Gemini 1.5 Pro', 'Llama 13B (Local)'] as const;
 const ACTIONS = ['</> Code', 'Strategize', 'Create', 'Write', 'Learn'] as const;
 
 function extractAssistantChunk(message: WebSocketMessage): string | null {
@@ -38,7 +30,6 @@ function extractAssistantChunk(message: WebSocketMessage): string | null {
 }
 
 export function ClawdChatInterface() {
-  const [model, setModel] = useState<(typeof MODEL_OPTIONS)[number]>('Claude 3.5 Sonnet');
   const [draft, setDraft] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -98,7 +89,6 @@ export function ClawdChatInterface() {
     send({
       type: 'openclaw:chat:message',
       message,
-      model,
       source: 'clawd-chat-interface',
       timestamp: new Date().toISOString(),
     });
@@ -157,24 +147,7 @@ export function ClawdChatInterface() {
             style={{ userSelect: 'text' }}
           />
 
-          <div className="mt-3 flex items-center justify-between gap-3">
-            <Select value={model} onValueChange={(value) => setModel(value as (typeof MODEL_OPTIONS)[number])}>
-              <SelectTrigger className="h-9 w-[220px] border-[#4a4947] bg-[#2b2a28] text-[#e6dbcb] focus:ring-0 focus:ring-offset-0">
-                <SelectValue placeholder="Select model" />
-              </SelectTrigger>
-              <SelectContent className="border-[#4a4947] bg-[#2b2a28] text-[#e6dbcb]">
-                {MODEL_OPTIONS.map((modelOption) => (
-                  <SelectItem
-                    key={modelOption}
-                    value={modelOption}
-                    className="focus:bg-[#3a3936] focus:text-[#e6dbcb]"
-                  >
-                    {modelOption}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
+          <div className="mt-3 flex items-center justify-end gap-3">
             <Button type="submit" disabled={!draft.trim()} className="bg-[#e6dbcb] text-[#1f1f1d] hover:bg-[#d5cbbd]">
               Send
             </Button>
