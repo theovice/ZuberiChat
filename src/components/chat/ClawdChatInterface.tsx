@@ -37,6 +37,7 @@ export function ClawdChatInterface() {
 
   const { send, isConnected, connectionState } = useWebSocket({
     autoConnect: true,
+    url: 'ws://localhost:18789',
     onMessage: (message) => {
       const nextChunk = extractAssistantChunk(message);
       if (!nextChunk) return;
