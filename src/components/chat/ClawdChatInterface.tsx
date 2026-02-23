@@ -14,6 +14,7 @@ type ChatMessage = {
   content: string;
 };
 
+const SESSION_KEY = 'agent:main:main';
 const ACTIONS = ['</> Code', 'Strategize', 'Create', 'Write', 'Learn'] as const;
 
 function buildConnectRequest(token: string): WebSocketMessage {
@@ -39,18 +40,35 @@ function buildConnectRequest(token: string): WebSocketMessage {
   };
 }
 
-function extractAssistantChunk(message: WebSocketMessage): string | null {
-  const chunk =
-    message.delta ??
-    message.content ??
-    message.text ??
-    (typeof message.data === 'object' && message.data !== null
-      ? (message.data as Record<string, unknown>).delta ??
-        (message.data as Record<string, unknown>).content ??
-        (message.data as Record<string, unknown>).text
-      : null);
+/**
+ * Extract text from an OpenClaw message object.
+ * Handles both string content and content-block arrays
+ * (e.g. [{ type: "text", text: "..." }, ...]).
+ */
+function extractTextFromMessage(message: unknown): string | null {
+  if (!message || typeof message !== 'object') return null;
+  const m = message as Record<string, unknown>;
 
-  return typeof chunk === 'string' ? chunk : null;
+  // String content
+  if (typeof m.content === 'string') return m.content;
+
+  // Content-block array (OpenClaw standard format)
+  if (Array.isArray(m.content)) {
+    const parts = m.content
+      .filter(
+        (block: unknown): block is { type: string; text: string } =>
+          typeof block === 'object' &&
+          block !== null &&
+          (block as Record<string, unknown>).type === 'text' &&
+          typeof (block as Record<string, unknown>).text === 'string',
+      )
+      .map((block) => block.text);
+    return parts.length > 0 ? parts.join('\n') : null;
+  }
+
+  // Fallback: top-level .text
+  if (typeof m.text === 'string') return m.text;
+  return null;
 }
 
 export function ClawdChatInterface() {
@@ -58,10 +76,14 @@ export function ClawdChatInterface() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [gatewayToken, setGatewayToken] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const streamingMessageIdRef = useRef<string | null>(null);
   const handshakeCompleteRef = useRef(false);
   const gatewayTokenRef = useRef<string | null>(null);
   const sendRef = useRef<(msg: WebSocketMessage) => void>(() => {});
+  // Track the active chat run for correlating streaming deltas
+  const activeRunIdRef = useRef<string | null>(null);
+  const streamingMessageIdRef = useRef<string | null>(null);
+  // Track pending RPC request IDs so we can match ack responses
+  const pendingRequestIdsRef = useRef<Set<string>>(new Set());
 
   // Load token from .openclaw.local.json via Tauri IPC on mount
   useEffect(() => {
@@ -84,7 +106,7 @@ export function ClawdChatInterface() {
       handshakeCompleteRef.current = false;
     },
     onMessage: (message) => {
-      // Step 1: Handle connect response (hello-ok or error)
+      // ── Handle connect handshake ──────────────────────────────────
       if (message.type === 'res' && !handshakeCompleteRef.current) {
         if (message.ok) {
           handshakeCompleteRef.current = true;
@@ -95,7 +117,7 @@ export function ClawdChatInterface() {
         return;
       }
 
-      // Step 2: Handle connect.challenge — respond with connect request
+      // ── Handle connect.challenge ─────────────────────────────────
       if (message.type === 'event' && message.event === 'connect.challenge') {
         const token = gatewayTokenRef.current;
         if (!token) {
@@ -106,23 +128,91 @@ export function ClawdChatInterface() {
         return;
       }
 
-      // Step 3: Normal message handling — extract streaming chunks
-      const nextChunk = extractAssistantChunk(message);
-      if (!nextChunk) return;
-
-      setMessages((current) => {
-        if (!streamingMessageIdRef.current) {
-          const id = crypto.randomUUID();
-          streamingMessageIdRef.current = id;
-          return [...current, { id, role: 'assistant', content: nextChunk }];
+      // ── Handle RPC responses (chat.send ack, etc.) ───────────────
+      if (message.type === 'res' && typeof message.id === 'string') {
+        if (pendingRequestIdsRef.current.has(message.id)) {
+          pendingRequestIdsRef.current.delete(message.id);
+          if (!message.ok) {
+            const errMsg =
+              typeof message.error === 'object' && message.error !== null
+                ? (message.error as Record<string, unknown>).message ?? 'Request failed'
+                : 'Request failed';
+            console.error('[OpenClaw] chat.send failed:', errMsg);
+            setMessages((current) => [
+              ...current,
+              { id: crypto.randomUUID(), role: 'assistant', content: `Error: ${errMsg}` },
+            ]);
+          }
         }
+        return;
+      }
 
-        return current.map((entry) =>
-          entry.id === streamingMessageIdRef.current
-            ? { ...entry, content: `${entry.content}${nextChunk}` }
-            : entry
-        );
-      });
+      // ── Handle chat broadcast events (delta / final / error / aborted) ──
+      if (message.type === 'event' && message.event === 'chat') {
+        const payload = message.payload as
+          | {
+              runId?: string;
+              sessionKey?: string;
+              state?: 'delta' | 'final' | 'error' | 'aborted';
+              message?: unknown;
+              errorMessage?: string;
+            }
+          | undefined;
+        if (!payload) return;
+
+        // Ignore events for other sessions
+        if (payload.sessionKey && payload.sessionKey !== SESSION_KEY) return;
+
+        const state = payload.state;
+
+        if (state === 'delta') {
+          const text = extractTextFromMessage(payload.message);
+          if (typeof text !== 'string') return;
+
+          setMessages((current) => {
+            if (!streamingMessageIdRef.current) {
+              const id = crypto.randomUUID();
+              streamingMessageIdRef.current = id;
+              return [...current, { id, role: 'assistant', content: text }];
+            }
+            // OpenClaw sends cumulative text in deltas — replace, don't append
+            return current.map((entry) =>
+              entry.id === streamingMessageIdRef.current ? { ...entry, content: text } : entry,
+            );
+          });
+        } else if (state === 'final') {
+          // Replace streaming message with final content if present
+          const text = extractTextFromMessage(payload.message);
+          if (text && streamingMessageIdRef.current) {
+            setMessages((current) =>
+              current.map((entry) =>
+                entry.id === streamingMessageIdRef.current ? { ...entry, content: text } : entry,
+              ),
+            );
+          } else if (text && !streamingMessageIdRef.current) {
+            // Non-streaming final (e.g. command responses)
+            setMessages((current) => [
+              ...current,
+              { id: crypto.randomUUID(), role: 'assistant', content: text },
+            ]);
+          }
+          activeRunIdRef.current = null;
+          streamingMessageIdRef.current = null;
+        } else if (state === 'error') {
+          const errText = payload.errorMessage ?? 'An error occurred';
+          setMessages((current) => [
+            ...current,
+            { id: crypto.randomUUID(), role: 'assistant', content: `Error: ${errText}` },
+          ]);
+          activeRunIdRef.current = null;
+          streamingMessageIdRef.current = null;
+        } else if (state === 'aborted') {
+          // Keep whatever was streamed so far
+          activeRunIdRef.current = null;
+          streamingMessageIdRef.current = null;
+        }
+        return;
+      }
     },
   });
 
@@ -156,13 +246,25 @@ export function ClawdChatInterface() {
     };
 
     setMessages((current) => [...current, userMessage]);
+
+    // Reset streaming state for the new response
+    const runId = crypto.randomUUID();
+    activeRunIdRef.current = runId;
     streamingMessageIdRef.current = null;
 
+    // Send as OpenClaw RPC: chat.send
+    const requestId = crypto.randomUUID();
+    pendingRequestIdsRef.current.add(requestId);
     send({
-      type: 'openclaw:chat:message',
-      message,
-      source: 'clawd-chat-interface',
-      timestamp: new Date().toISOString(),
+      type: 'req',
+      id: requestId,
+      method: 'chat.send',
+      params: {
+        sessionKey: SESSION_KEY,
+        message,
+        idempotencyKey: runId,
+        deliver: false,
+      },
     });
 
     setDraft('');
