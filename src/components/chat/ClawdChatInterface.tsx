@@ -81,7 +81,7 @@ export function ClawdChatInterface() {
 
   const { send, isConnected, connectionState } = useWebSocket({
     autoConnect: gatewayToken !== null,
-    url: 'ws://localhost:18789',
+    url: 'ws://127.0.0.1:18789',
     onConnected: () => {
       handshakeCompleteRef.current = false;
     },
