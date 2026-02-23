@@ -1,9 +1,9 @@
-function App() {
+import { ClawdChatInterface } from "./components/chat/ClawdChatInterface";
+
+export default function App() {
   return (
-    <div id="app">
-      <h1>ZuberiChat</h1>
+    <div style={{ width: "100vw", height: "100vh" }}>
+      <ClawdChatInterface />
     </div>
   );
 }
-
-export default App;
