@@ -223,7 +223,7 @@ export function ClawdChatInterface() {
     if (!node) return;
 
     node.style.height = 'auto';
-    node.style.height = `${Math.min(node.scrollHeight, 220)}px`;
+    node.style.height = `${Math.min(node.scrollHeight, 200)}px`;
   }, [draft]);
 
   // Map WebSocket connectionState to ConnectionStatus prop
@@ -277,8 +277,10 @@ export function ClawdChatInterface() {
   };
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-4xl flex-col px-6 py-4">
-      <ConnectionStatus status={connStatus} />
+    <div className="mx-auto flex h-full w-full max-w-4xl flex-col px-6 py-4" style={{ overflow: 'visible' }}>
+      <div style={{ minHeight: 80, paddingTop: 16, flexShrink: 0, overflow: 'visible', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <ConnectionStatus status={connStatus} />
+      </div>
       <div className="ghost-messages mb-4 flex-1 overflow-y-auto px-4" style={{ background: 'transparent' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
           {messages.length === 0 ? (
@@ -308,19 +310,19 @@ export function ClawdChatInterface() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-3">
-        <div className="rounded-xl border border-[#4a4947] bg-[#31302e] p-3">
+        <div className="border border-[#4a4947] bg-[#31302e] p-3">
           <Textarea
             ref={textareaRef}
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="How can I help you today?"
-            className="max-h-[220px] min-h-[96px] resize-none border-none bg-transparent px-0 text-sm text-[#e6dbcb] placeholder:text-[#b0afae] focus-visible:ring-0"
+            className="max-h-[200px] min-h-[44px] resize-none border-none bg-transparent px-0 text-sm text-[#e6dbcb] placeholder:text-[#b0afae] focus-visible:ring-0"
             style={{ userSelect: 'text' }}
           />
 
           <div className="mt-3 flex items-center justify-end gap-3">
-            <Button type="submit" disabled={!draft.trim()} className="bg-[#e6dbcb] text-[#1f1f1d] hover:bg-[#d5cbbd]">
+            <Button type="submit" disabled={!draft.trim()} className="rounded-none bg-[#e6dbcb] text-[#1f1f1d] hover:bg-[#d5cbbd]">
               Send
             </Button>
           </div>
@@ -332,7 +334,7 @@ export function ClawdChatInterface() {
               key={action}
               type="button"
               variant="ghost"
-              className="h-8 border border-[#4a4947] px-3 text-[#b0afae] hover:bg-[#31302e] hover:text-[#e6dbcb]"
+              className="h-8 rounded-none border border-[#4a4947] px-3 text-[#b0afae] hover:bg-[#31302e] hover:text-[#e6dbcb]"
             >
               {action}
             </Button>
