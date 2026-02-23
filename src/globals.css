@@ -4,29 +4,39 @@
 
 /* --- Obsidian + Ember Gold Design Tokens --- */
 :root {
-  /* ── Backgrounds ── */
-  --bg-base: #1c1b1a;
+  /* ── Base — Obsidian ── */
+  --bg-deep: #0a0908;
+  --bg-base: #0e0d0c;
   --bg-image-overlay: rgba(0, 0, 0, 0.6);
+  --surface-0: #141312;
+  --surface-1: #1c1b1a;
+  --surface-2: #252321;
+  --surface-3: #2e2c2a;
   --surface-glass-1: rgba(255, 255, 255, 0.08);
   --surface-glass-2: rgba(255, 255, 255, 0.14);
   --surface-glass-3: rgba(255, 255, 255, 0.20);
   --backdrop-blur: 24px;
 
-  /* ── Typography ── */
+  /* ── Ember Gold ── */
+  --ember: #f0a020;
+  --ember-light: #f0c060;
+  --ember-deep: #c06010;
+  --ember-shadow: #80380a;
+  --ember-glow: rgba(240, 160, 32, 0.15);
+  --ember-subtle: rgba(240, 160, 32, 0.06);
+
+  /* ── Text ── */
   --text-primary: #eae9e9;
   --text-secondary: #b0afae;
   --text-muted: #666564;
-
-  /* ── Ember Gold Accent ── */
-  --ember: #d4a054;
-  --ember-light: #e6b76a;
-  --ember-dim: #9c7840;
-  --accent-primary: var(--ember-light);
+  --text-ember: #f0c060;
+  --accent-primary: #e6dbcb;
 
   /* ── Borders ── */
-  --border-subtle: rgba(255, 255, 255, 0.10);
-  --border-medium: rgba(255, 255, 255, 0.18);
-  --border-ember: rgba(212, 160, 84, 0.45);
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-medium: rgba(255, 255, 255, 0.10);
+  --border-strong: rgba(255, 255, 255, 0.18);
+  --border-ember: rgba(240, 160, 32, 0.30);
 
   /* ── Radii ── */
   --radius-sm: 8px;
@@ -220,8 +230,8 @@ input, textarea, [contenteditable="true"] {
 
 /* ── Titlebar Kanban Toggle ────────────────────────────── */
 .titlebar-button--kanban.active {
-  background: rgba(212, 160, 84, 0.12);
+  background: var(--ember-subtle);
   color: var(--ember-light);
   border-bottom: 2px solid var(--ember);
-  box-shadow: 0 1px 6px rgba(212, 160, 84, 0.18);
+  box-shadow: 0 1px 6px var(--ember-glow);
 }

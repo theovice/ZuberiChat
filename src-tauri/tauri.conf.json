@@ -25,6 +25,10 @@
   },
   "bundle": {
     "active": false,
-    "targets": "all"
+    "targets": "all",
+    "icon": [
+      "icons/zuberi.ico",
+      "icons/icon.png"
+    ]
   }
 }
