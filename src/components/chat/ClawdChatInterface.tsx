@@ -33,7 +33,7 @@ function buildConnectRequest(token: string): WebSocketMessage {
         mode: 'ui',
       },
       role: 'operator',
-      scopes: ['operator.read', 'operator.write'],
+      scopes: ['operator.admin', 'operator.approvals'],
       caps: [],
       auth: { token },
     },
