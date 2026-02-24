@@ -97,9 +97,19 @@ export function ClawdChatInterface() {
       });
   }, []);
 
+  // Build WebSocket URL with token query param for gateway auth
+  const wsUrl = useMemo(() => {
+    if (!gatewayToken) return 'ws://127.0.0.1:18789';
+    const url = `ws://127.0.0.1:18789?token=${encodeURIComponent(gatewayToken)}`;
+    // Log URL with redacted token (last 4 chars only)
+    const last4 = gatewayToken.slice(-4);
+    console.info(`[OpenClaw] WebSocket URL: ws://127.0.0.1:18789?token=...${last4}`);
+    return url;
+  }, [gatewayToken]);
+
   const { send, connectionState } = useWebSocket({
     autoConnect: gatewayToken !== null,
-    url: 'ws://127.0.0.1:18789',
+    url: wsUrl,
     onOpen: gatewayToken ? buildConnectRequest(gatewayToken) : undefined,
     onConnected: () => {
       handshakeCompleteRef.current = false;
@@ -227,11 +237,26 @@ export function ClawdChatInterface() {
   }, [draft]);
 
   // Map WebSocket connectionState to ConnectionStatus prop
+  // - Token loading (gatewayToken===null) → 'connecting' (not disconnected)
+  // - First connect attempt → 'connecting'
+  // - After any failure (reconnecting) → 'disconnected' (show crack once)
+  // - Max attempts reached (disconnected) → 'disconnected'
   const connStatus = useMemo<'connecting' | 'connected' | 'disconnected'>(() => {
-    if (connectionState === 'connected') return 'connected';
-    if (connectionState === 'connecting' || connectionState === 'reconnecting') return 'connecting';
-    return 'disconnected';
-  }, [connectionState]);
+    let mapped: 'connecting' | 'connected' | 'disconnected';
+    if (connectionState === 'connected') {
+      mapped = 'connected';
+    } else if (gatewayToken === null) {
+      // Token still loading — show connecting animation
+      mapped = 'connecting';
+    } else if (connectionState === 'connecting') {
+      mapped = 'connecting';
+    } else {
+      // 'reconnecting' or 'disconnected' → show as disconnected
+      mapped = 'disconnected';
+    }
+    console.info(`[OpenClaw] connectionState=${connectionState} token=${gatewayToken ? 'loaded' : 'null'} → connStatus=${mapped}`);
+    return mapped;
+  }, [connectionState, gatewayToken]);
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();

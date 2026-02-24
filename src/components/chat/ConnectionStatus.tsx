@@ -182,8 +182,9 @@ function AnimatedText({
 // ============================================
 export function ConnectionStatus({ status }: ConnectionStatusProps) {
   const [phase, setPhase] = useState<AnimPhase>('idle');
-  const prevStatusRef = useRef<string>(status);
+  const prevStatusRef = useRef<string | null>(null); // null = first render
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const hasDisconnectedRef = useRef(false); // track if crack has played
 
   // Inject keyframes once
   useEffect(() => {
@@ -208,20 +209,16 @@ export function ConnectionStatus({ status }: ConnectionStatusProps) {
     return id;
   };
 
-  // ── Animation sequences ──
+  // ── Single unified animation effect (handles mount + changes) ──
   useEffect(() => {
     const prev = prevStatusRef.current;
+    const isMount = prev === null;
     prevStatusRef.current = status;
     clearTimers();
 
-    if (status === 'connecting' || status === 'connected') {
-      if (prev === 'disconnected' && phase === 'discIdle') {
-        // ── Reconnect sequence: fade "Connection lost" → icon springs in
-        setPhase('reconnectFade');
-        schedule(() => setPhase('reconnectIcon'), TIMING.reconnectFade);
-        schedule(() => setPhase('iconFloat'), TIMING.reconnectFade + TIMING.iconSettleDuration);
-      } else if (prev === 'disconnected' || prev === status) {
-        // ── Fresh connect / mount: text expand → collapse → icon
+    if (status === 'connecting') {
+      if (isMount) {
+        // ── First mount: play "Connecting to OpenClaw" text expand → collapse → icon
         setPhase('textExpand');
         schedule(() => setPhase('textCollapse'), TIMING.textExpand + 200);
         schedule(() => setPhase('iconAppear'), TIMING.textExpand + 200 + TIMING.textCollapse);
@@ -229,36 +226,46 @@ export function ConnectionStatus({ status }: ConnectionStatusProps) {
           () => setPhase('iconFloat'),
           TIMING.textExpand + 200 + TIMING.textCollapse + TIMING.iconSettleDuration,
         );
+      } else if (prev === 'disconnected' && hasDisconnectedRef.current && phase === 'discIdle') {
+        // ── Reconnect from "Connection lost": fade text → icon springs in
+        setPhase('reconnectFade');
+        schedule(() => setPhase('reconnectIcon'), TIMING.reconnectFade);
+        schedule(() => setPhase('iconFloat'), TIMING.reconnectFade + TIMING.iconSettleDuration);
+      }
+      // If already in connecting animation (e.g. reconnect attempts), don't restart it
+    } else if (status === 'connected') {
+      // Reset disconnect flag so future disconnects can play crack again
+      hasDisconnectedRef.current = false;
+      if (phase !== 'iconFloat') {
+        // ── Jump to floating icon if not already there
+        setPhase('iconAppear');
+        schedule(() => setPhase('iconFloat'), TIMING.iconSettleDuration);
       }
     } else if (status === 'disconnected') {
-      // ── Disconnect sequence: turn red → crack → "Connection lost"
-      setPhase('turnRed');
-      schedule(() => setPhase('crack'), TIMING.turnRed + 100);
-      schedule(() => setPhase('discTextExpand'), TIMING.turnRed + 100 + TIMING.crack);
-      schedule(
-        () => setPhase('discIdle'),
-        TIMING.turnRed + 100 + TIMING.crack + TIMING.discTextExpand + 200,
-      );
+      if (!hasDisconnectedRef.current) {
+        // ── First disconnect: full crack animation
+        hasDisconnectedRef.current = true;
+        if (isMount) {
+          // Mounted already disconnected — skip crack, show "Connection lost" directly
+          setPhase('discTextExpand');
+          schedule(() => setPhase('discIdle'), TIMING.discTextExpand + 200);
+        } else {
+          // ── Normal disconnect: turn red → crack → "Connection lost"
+          setPhase('turnRed');
+          schedule(() => setPhase('crack'), TIMING.turnRed + 100);
+          schedule(() => setPhase('discTextExpand'), TIMING.turnRed + 100 + TIMING.crack);
+          schedule(
+            () => setPhase('discIdle'),
+            TIMING.turnRed + 100 + TIMING.crack + TIMING.discTextExpand + 200,
+          );
+        }
+      }
+      // If already disconnected (repeated reconnect failures), stay in discIdle — don't re-crack
     }
 
     return clearTimers;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
-
-  // ── Kick off the startup animation on mount ──
-  useEffect(() => {
-    setPhase('textExpand');
-    const t1 = setTimeout(() => setPhase('textCollapse'), TIMING.textExpand + 200);
-    const t2 = setTimeout(
-      () => setPhase('iconAppear'),
-      TIMING.textExpand + 200 + TIMING.textCollapse,
-    );
-    const t3 = setTimeout(
-      () => setPhase('iconFloat'),
-      TIMING.textExpand + 200 + TIMING.textCollapse + TIMING.iconSettleDuration,
-    );
-    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
-  }, []);
 
   // ── Render ──
   const showConnectText =
@@ -287,13 +294,13 @@ export function ConnectionStatus({ status }: ConnectionStatusProps) {
         justifyContent: 'center',
         position: 'relative',
         flexShrink: 0,
-        overflow: 'hidden',
+        overflow: 'visible',
       }}
     >
       {/* ── "Connected to OpenClaw" text ── */}
       {showConnectText && (
         <AnimatedText
-          text="Connected to OpenClaw"
+          text="Connecting to OpenClaw"
           color="#f0a020"
           phase={phase === 'textExpand' ? 'expand' : 'collapse'}
           duration={phase === 'textExpand' ? TIMING.textExpand : TIMING.textCollapse}
