@@ -1,8 +1,10 @@
 import { useCallback, useState } from "react";
 import { Titlebar } from "./components/layout/Titlebar";
 import { PanelLayout } from "./components/layout/PanelLayout";
+import { useUpdater } from "./hooks/useUpdater";
 
 export default function App() {
+  useUpdater();
   const [isPanelOpen, setIsPanelOpen] = useState(false);
 
   const handleTogglePanel = useCallback(() => {

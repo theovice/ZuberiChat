@@ -9,3 +9,7 @@
 src-tauri/gen
 .openclaw.local.json
 *.local.json
+nul
+*.sig
+*.key
+*.key.pub

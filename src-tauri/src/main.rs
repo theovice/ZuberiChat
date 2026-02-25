@@ -52,6 +52,8 @@ fn read_gateway_token() -> Result<String, String> {
 
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .invoke_handler(tauri::generate_handler![read_gateway_token])
         .setup(|app| {
             // Open devtools automatically in debug builds
