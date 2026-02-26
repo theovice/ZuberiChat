@@ -302,7 +302,7 @@ export function ClawdChatInterface() {
 
   return (
     <div className="mx-auto flex h-full w-full max-w-4xl flex-col px-6" style={{ overflow: 'visible' }}>
-      <div style={{ paddingTop: 8, flexShrink: 0, overflow: 'visible', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ paddingTop: 40, flexShrink: 0, overflow: 'visible', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <ConnectionStatus status={connStatus} />
       </div>
       <div className="ghost-messages flex-1 overflow-y-auto px-4" style={{ background: 'transparent' }}>

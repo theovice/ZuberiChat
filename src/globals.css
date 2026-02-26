@@ -123,28 +123,23 @@ input, textarea, [contenteditable="true"] {
   border-radius: 0;
 }
 
-/* ── Custom Titlebar ───────────────────────────────────── */
+/* ── Custom Titlebar (overlay) ─────────────────────────── */
 
 .titlebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 36px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  height: 36px;
-  background: #0e0d0c;
+  justify-content: flex-end;
+  background: transparent;
   color: var(--text-secondary);
   user-select: none;
   -webkit-user-select: none;
-  flex-shrink: 0;
-  padding-left: 12px;
+  z-index: 9999;
   font-family: system-ui, -apple-system, sans-serif;
-}
-
-.titlebar-title {
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  pointer-events: none;
-  color: var(--text-muted);
 }
 
 .titlebar-controls {
@@ -242,6 +237,26 @@ input, textarea, [contenteditable="true"] {
   color: var(--ember-light);
   border-bottom: 2px solid var(--ember);
   box-shadow: 0 1px 6px var(--ember-glow);
+}
+
+/* ── Update Indicator ─────────────────────────────────── */
+.titlebar-button--update {
+  position: relative;
+}
+
+.update-dot {
+  display: block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50% !important;
+  background: var(--ember);
+  box-shadow: 0 0 6px var(--ember), 0 0 12px var(--ember-glow);
+  animation: update-pulse 2s ease-in-out infinite;
+}
+
+@keyframes update-pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 6px var(--ember), 0 0 12px var(--ember-glow); }
+  50%      { opacity: 0.6; box-shadow: 0 0 3px var(--ember), 0 0 6px var(--ember-glow); }
 }
 
 /* ── Ghost Messages — hidden scrollbar ────────────────── */

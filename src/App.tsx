@@ -4,7 +4,7 @@ import { PanelLayout } from "./components/layout/PanelLayout";
 import { useUpdater } from "./hooks/useUpdater";
 
 export default function App() {
-  useUpdater();
+  const { updateAvailable, triggerUpdate } = useUpdater();
   const [isPanelOpen, setIsPanelOpen] = useState(false);
 
   const handleTogglePanel = useCallback(() => {
@@ -21,8 +21,13 @@ export default function App() {
         background: "var(--bg-base)",
       }}
     >
-      <Titlebar isPanelOpen={isPanelOpen} onTogglePanel={handleTogglePanel} />
-      <div style={{ marginTop: "36px", flex: 1, overflow: "hidden" }}>
+      <Titlebar
+        isPanelOpen={isPanelOpen}
+        onTogglePanel={handleTogglePanel}
+        updateAvailable={updateAvailable}
+        onUpdateClick={triggerUpdate}
+      />
+      <div style={{ flex: 1, overflow: "hidden" }}>
         <PanelLayout isPanelOpen={isPanelOpen} />
       </div>
     </div>

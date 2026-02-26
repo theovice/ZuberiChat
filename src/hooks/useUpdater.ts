@@ -1,13 +1,16 @@
-import { useEffect } from "react";
-import { check } from "@tauri-apps/plugin-updater";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { check, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 
 /**
- * Silently check for updates on app launch.
- * If an update is found, prompts via native confirm dialog,
- * then downloads, installs, and relaunches the app.
+ * Check for updates on app launch and expose state to the UI.
+ * Returns `updateAvailable` (boolean) and `triggerUpdate` (callback)
+ * so the titlebar can render an indicator dot and let the user click it.
  */
 export function useUpdater() {
+  const [updateAvailable, setUpdateAvailable] = useState(false);
+  const updateRef = useRef<Update | null>(null);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -19,34 +22,8 @@ export function useUpdater() {
         console.log(
           `[updater] Update available: v${update.version} (current: v${update.currentVersion})`
         );
-
-        const yes = window.confirm(
-          `A new version of Zuberi is available (v${update.version}). Download and install now?`
-        );
-        if (!yes || cancelled) return;
-
-        console.log("[updater] Downloading update...");
-        await update.downloadAndInstall((event) => {
-          switch (event.event) {
-            case "Started":
-              console.log(
-                `[updater] Download started (${event.data.contentLength ?? "unknown"} bytes)`
-              );
-              break;
-            case "Progress":
-              console.log(
-                `[updater] Downloaded ${event.data.chunkLength} bytes`
-              );
-              break;
-            case "Finished":
-              console.log("[updater] Download finished");
-              break;
-          }
-        });
-
-        if (cancelled) return;
-        console.log("[updater] Relaunching...");
-        await relaunch();
+        updateRef.current = update;
+        setUpdateAvailable(true);
       } catch (err) {
         // Silent failure — don't bother the user if update check fails
         console.warn("[updater] Update check failed:", err);
@@ -61,4 +38,38 @@ export function useUpdater() {
       clearTimeout(timer);
     };
   }, []);
+
+  const triggerUpdate = useCallback(async () => {
+    const update = updateRef.current;
+    if (!update) return;
+
+    const yes = window.confirm(
+      `A new version of Zuberi is available (v${update.version}). Download and install now?`
+    );
+    if (!yes) return;
+
+    console.log("[updater] Downloading update...");
+    await update.downloadAndInstall((event) => {
+      switch (event.event) {
+        case "Started":
+          console.log(
+            `[updater] Download started (${event.data.contentLength ?? "unknown"} bytes)`
+          );
+          break;
+        case "Progress":
+          console.log(
+            `[updater] Downloaded ${event.data.chunkLength} bytes`
+          );
+          break;
+        case "Finished":
+          console.log("[updater] Download finished");
+          break;
+      }
+    });
+
+    console.log("[updater] Relaunching...");
+    await relaunch();
+  }, []);
+
+  return { updateAvailable, triggerUpdate };
 }

@@ -7,9 +7,16 @@ const appWindow = getCurrentWindow();
 interface TitlebarProps {
   isPanelOpen?: boolean;
   onTogglePanel?: () => void;
+  updateAvailable?: boolean;
+  onUpdateClick?: () => void;
 }
 
-export function Titlebar({ isPanelOpen = false, onTogglePanel }: TitlebarProps) {
+export function Titlebar({
+  isPanelOpen = false,
+  onTogglePanel,
+  updateAvailable = false,
+  onUpdateClick,
+}: TitlebarProps) {
   const [isMaximized, setIsMaximized] = useState(false);
 
   useEffect(() => {
@@ -39,11 +46,19 @@ export function Titlebar({ isPanelOpen = false, onTogglePanel }: TitlebarProps) 
         if ((e.target as HTMLElement).closest(".titlebar-button")) return;
       }}
     >
-      <div data-tauri-drag-region className="titlebar-title">
-        Zuberi
-      </div>
-
       <div className="titlebar-controls">
+        {/* Update indicator */}
+        {updateAvailable && (
+          <button
+            className="titlebar-button titlebar-button--update"
+            onClick={onUpdateClick}
+            aria-label="Update available"
+            title="Update available — click to install"
+          >
+            <span className="update-dot" />
+          </button>
+        )}
+
         {/* Kanban panel toggle */}
         <button
           className={`titlebar-button titlebar-button--kanban${isPanelOpen ? " active" : ""}`}
