@@ -14,7 +14,6 @@ type ChatMessage = {
 };
 
 const SESSION_KEY = 'agent:main:main';
-const ACTIONS = ['</> Code', 'Strategize', 'Create', 'Write', 'Learn'] as const;
 
 function buildConnectRequest(token: string): WebSocketMessage {
   return {
@@ -302,39 +301,33 @@ export function ClawdChatInterface() {
   };
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-4xl flex-col px-6 py-4" style={{ overflow: 'visible' }}>
-      <div style={{ minHeight: 80, paddingTop: 16, flexShrink: 0, overflow: 'visible', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    <div className="mx-auto flex h-full w-full max-w-4xl flex-col px-6" style={{ overflow: 'visible' }}>
+      <div style={{ paddingTop: 8, flexShrink: 0, overflow: 'visible', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <ConnectionStatus status={connStatus} />
       </div>
-      <div className="ghost-messages mb-4 flex-1 overflow-y-auto px-4" style={{ background: 'transparent' }}>
+      <div className="ghost-messages flex-1 overflow-y-auto px-4" style={{ background: 'transparent' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
-          {messages.length === 0 ? (
-            <p style={{ color: '#3a3836', textAlign: 'center', fontSize: '0.9rem', paddingTop: '2rem' }}>
-              Your conversation with OpenClaw will appear here.
-            </p>
-          ) : (
-            messages.map((message) => (
-              <div
-                key={message.id}
-                style={{
-                  textAlign: message.role === 'user' ? 'right' : 'left',
-                  color: message.role === 'user' ? '#f0a020' : '#eae9e9',
-                  fontSize: '0.9rem',
-                  lineHeight: 1.6,
-                  maxWidth: '85%',
-                  alignSelf: message.role === 'user' ? 'flex-end' : 'flex-start',
-                  whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-word',
-                }}
-              >
-                {message.content}
-              </div>
-            ))
-          )}
+          {messages.map((message) => (
+            <div
+              key={message.id}
+              style={{
+                textAlign: message.role === 'user' ? 'right' : 'left',
+                color: message.role === 'user' ? '#f0a020' : '#eae9e9',
+                fontSize: '0.9rem',
+                lineHeight: 1.6,
+                maxWidth: '85%',
+                alignSelf: message.role === 'user' ? 'flex-end' : 'flex-start',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+              }}
+            >
+              {message.content}
+            </div>
+          ))}
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-3">
+      <form onSubmit={handleSubmit} style={{ flexShrink: 0, paddingBottom: 12, paddingTop: 8 }}>
         <div className="border border-[#4a4947] bg-[#31302e] p-3">
           <Textarea
             ref={textareaRef}
@@ -351,19 +344,6 @@ export function ClawdChatInterface() {
               Send
             </Button>
           </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          {ACTIONS.map((action) => (
-            <Button
-              key={action}
-              type="button"
-              variant="ghost"
-              className="h-8 rounded-none border border-[#4a4947] px-3 text-[#b0afae] hover:bg-[#31302e] hover:text-[#e6dbcb]"
-            >
-              {action}
-            </Button>
-          ))}
         </div>
       </form>
     </div>
