@@ -4,6 +4,7 @@ import { emit } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { exit } from '@tauri-apps/plugin-process';
 import { ChevronDown, Minus, Square, X } from 'lucide-react';
+import { UsageMeter } from '../chat/UsageMeter';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -309,8 +310,9 @@ export function Titlebar({ updateAvailable = false, onUpdateClick }: TitlebarPro
       {/* Center spacer — drag region */}
       <div style={{ flex: 1 }} data-tauri-drag-region />
 
-      {/* Right: update indicator + window controls */}
+      {/* Right: usage meter + update indicator + window controls */}
       <div className="titlebar-controls">
+        <UsageMeter />
         {updateAvailable && (
           <button
             className="titlebar-button titlebar-button--update"
