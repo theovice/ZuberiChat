@@ -1,0 +1,42 @@
+# =============================================================================
+# Veritas Kanban — Production Deployment (CEG)
+# =============================================================================
+# Deploy:
+#   scp -r . ceg:/opt/zuberi/projects/veritas-kanban
+#   ssh ceg "cd /opt/zuberi/projects/veritas-kanban && docker compose -f docker-compose.prod.yml up -d --build"
+#
+# Logs:
+#   ssh ceg "docker logs -f veritas-kanban"
+# =============================================================================
+
+services:
+  veritas-kanban:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: veritas-kanban
+    working_dir: /app/server
+    ports:
+      - '3001:3001'
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - DATA_DIR=/app/data
+      # Auth
+      - VERITAS_AUTH_ENABLED=true
+      - VERITAS_AUTH_LOCALHOST_BYPASS=false
+      - VERITAS_ADMIN_KEY=b10ae899bb62a711a2bcda8fcb44dcbffa92cd117162feee61f73790e143bc7a
+      # CORS — allow ZuberiChat desktop (Tauri) + KILO dev access
+      - CORS_ORIGINS=http://100.100.101.1:3001,http://100.127.23.52:3001,http://localhost:3001,tauri://localhost
+      # Integration — OpenClaw gateway on KILO
+      - CLAWDBOT_GATEWAY=http://100.127.23.52:18789
+    volumes:
+      # Persistent task data on host
+      - /opt/zuberi/data/kanban:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:3001/health']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

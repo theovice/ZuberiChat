@@ -241,7 +241,7 @@ export function Titlebar({ updateAvailable = false, onUpdateClick }: TitlebarPro
     {
       label: 'Kanban Board',
       action: () => {
-        invoke('open_url_in_browser', { url: 'http://localhost:3001' }).catch(console.error);
+        invoke('open_url_in_browser', { url: 'http://100.100.101.1:3001' }).catch(console.error);
         closeMenu();
       },
     },
