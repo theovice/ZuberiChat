@@ -15,9 +15,6 @@ import { ViewProvider } from "@kanban/contexts/ViewContext";
 // ---------------------------------------------------------------------------
 // Isolated QueryClient for the Kanban panel
 // ---------------------------------------------------------------------------
-// This keeps Kanban's React Query cache separate from Zuberi's own data so
-// the two systems don't interfere with each other.
-// ---------------------------------------------------------------------------
 const kanbanQueryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -27,14 +24,14 @@ const kanbanQueryClient = new QueryClient({
   },
 });
 
-/**
- * Bridge component that sits inside QueryClientProvider so hooks like
- * useTaskSync (which needs useQueryClient) work correctly.
- */
+// ---------------------------------------------------------------------------
+// Bridge component — wraps children with Kanban WebSocket context.
+// Retry capped at 2 so we don't spam the console if the backend drops.
+// ---------------------------------------------------------------------------
 function KanbanBridge({ children }: { children: React.ReactNode }) {
   const { isConnected, connectionState, reconnectAttempt } = useWebSocket({
     onOpen: { type: "subscribe:tasks" },
-    maxReconnectAttempts: 20,
+    maxReconnectAttempts: 2,
   });
 
   return (
@@ -48,12 +45,10 @@ function KanbanBridge({ children }: { children: React.ReactNode }) {
   );
 }
 
-/**
- * Self-contained Kanban panel that wraps KanbanBoard with every provider
- * it needs. Intended to be rendered inside PanelLayout's right slot.
- */
+// ---------------------------------------------------------------------------
+// KanbanPanel — public export
+// ---------------------------------------------------------------------------
 export function KanbanPanel() {
-  // Stable reference so <QueryClientProvider> doesn't re-mount
   const client = useMemo(() => kanbanQueryClient, []);
 
   return (

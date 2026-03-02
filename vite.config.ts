@@ -89,6 +89,9 @@ export default defineConfig({
         "index.ts",
       ),
     },
+    // Force all modules (including @dnd-kit/core inside the Kanban subtree)
+    // to share a single React instance — prevents "Invalid hook call" errors.
+    dedupe: ["react", "react-dom"],
   },
   server: {
     port: 3000,

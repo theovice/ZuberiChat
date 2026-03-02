@@ -255,6 +255,9 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
   const send = useCallback((message: WebSocketMessage) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(message));
+    } else {
+      console.warn('[WebSocket] send() DROPPED — readyState=%s (ws=%s)',
+        wsRef.current?.readyState ?? 'null', wsRef.current ? 'exists' : 'null');
     }
   }, []);
 

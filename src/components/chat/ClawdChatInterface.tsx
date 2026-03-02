@@ -1,9 +1,13 @@
-import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { FormEvent, KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useWebSocket, type WebSocketMessage } from '@/hooks/useWebSocket';
 import { ConnectionStatus } from '@/components/chat/ConnectionStatus';
+import { ModelSelector } from '@/components/chat/ModelSelector';
+import { ModeSelector } from '@/components/chat/ModeSelector';
+import { GpuStatus } from '@/components/chat/GpuStatus';
 
 type ChatRole = 'user' | 'assistant';
 
@@ -14,6 +18,8 @@ type ChatMessage = {
 };
 
 const SESSION_KEY = 'agent:main:main';
+
+type ModelEntry = { id: string; name: string; parameterSize?: string; family?: string };
 
 function buildConnectRequest(token: string): WebSocketMessage {
   return {
@@ -40,10 +46,18 @@ function buildConnectRequest(token: string): WebSocketMessage {
 
 /**
  * Extract text from an OpenClaw message object.
- * Handles both string content and content-block arrays
- * (e.g. [{ type: "text", text: "..." }, ...]).
+ * Handles four payload shapes:
+ *   1. Content-block array: { content: [{ type: "text", text: "..." }] }
+ *   2. Plain string content: { content: "..." }  or bare string
+ *   3. Top-level .text:      { text: "..." }
+ *   4. Agent stream format:  { data: { text: "...", delta: "..." } }
+ *
+ * Never returns null when there is actual text content in the message.
  */
 function extractTextFromMessage(message: unknown): string | null {
+  // Bare string
+  if (typeof message === 'string') return message;
+
   if (!message || typeof message !== 'object') return null;
   const m = message as Record<string, unknown>;
 
@@ -51,21 +65,31 @@ function extractTextFromMessage(message: unknown): string | null {
   if (typeof m.content === 'string') return m.content;
 
   // Content-block array (OpenClaw standard format)
+  // Accepts any block with a .text field, regardless of .type, to handle
+  // varied payloads.  Also handles bare string entries in the array.
   if (Array.isArray(m.content)) {
     const parts = m.content
-      .filter(
-        (block: unknown): block is { type: string; text: string } =>
-          typeof block === 'object' &&
-          block !== null &&
-          (block as Record<string, unknown>).type === 'text' &&
-          typeof (block as Record<string, unknown>).text === 'string',
-      )
-      .map((block) => block.text);
-    return parts.length > 0 ? parts.join('\n') : null;
+      .map((block: unknown): string | null => {
+        if (typeof block === 'string') return block;
+        if (block && typeof block === 'object') {
+          const b = block as Record<string, unknown>;
+          if (typeof b.text === 'string') return b.text;
+        }
+        return null;
+      })
+      .filter((t): t is string => t !== null);
+    if (parts.length > 0) return parts.join('\n');
   }
 
-  // Fallback: top-level .text
+  // Top-level .text
   if (typeof m.text === 'string') return m.text;
+
+  // Nested .data.text (agent stream format)
+  if (m.data && typeof m.data === 'object') {
+    const data = m.data as Record<string, unknown>;
+    if (typeof data.text === 'string') return data.text;
+  }
+
   return null;
 }
 
@@ -73,6 +97,7 @@ export function ClawdChatInterface() {
   const [draft, setDraft] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [gatewayToken, setGatewayToken] = useState<string | null>(null);
+  const [handshakeComplete, setHandshakeComplete] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const handshakeCompleteRef = useRef(false);
   const gatewayTokenRef = useRef<string | null>(null);
@@ -82,6 +107,8 @@ export function ClawdChatInterface() {
   const streamingMessageIdRef = useRef<string | null>(null);
   // Track pending RPC request IDs so we can match ack responses
   const pendingRequestIdsRef = useRef<Set<string>>(new Set());
+  // Models state — populated from Ollama API on KILO
+  const [models, setModels] = useState<ModelEntry[]>([]);
 
   // Load token from .openclaw.local.json via Tauri IPC on mount
   useEffect(() => {
@@ -94,6 +121,52 @@ export function ClawdChatInterface() {
       .catch((err) => {
         console.error('[OpenClaw] Failed to load gateway token:', err);
       });
+  }, []);
+
+  // ── Menu event listeners ──────────────────────────────────────────
+  useEffect(() => {
+    const unlisteners: Promise<() => void>[] = [];
+
+    // New Conversation: clear chat and reset streaming state
+    unlisteners.push(
+      listen('new-conversation', () => {
+        setMessages([]);
+        setDraft('');
+        activeRunIdRef.current = null;
+        streamingMessageIdRef.current = null;
+        pendingRequestIdsRef.current.clear();
+        console.info('[Zuberi] New conversation started');
+      }),
+    );
+
+    // Open Settings (placeholder — no settings panel yet)
+    unlisteners.push(
+      listen('open-settings', () => {
+        console.info('[Zuberi] Settings requested — panel not yet implemented');
+      }),
+    );
+
+    // Zoom controls
+    unlisteners.push(
+      listen<string>('zoom', (event) => {
+        const current = parseFloat(document.body.style.zoom || '1');
+        switch (event.payload) {
+          case 'in':
+            document.body.style.zoom = String(Math.min(current + 0.1, 2.0));
+            break;
+          case 'out':
+            document.body.style.zoom = String(Math.max(current - 0.1, 0.5));
+            break;
+          case 'reset':
+            document.body.style.zoom = '1';
+            break;
+        }
+      }),
+    );
+
+    return () => {
+      unlisteners.forEach((p) => p.then((fn) => fn()));
+    };
   }, []);
 
   // Build WebSocket URL with token query param for gateway auth
@@ -112,12 +185,14 @@ export function ClawdChatInterface() {
     onOpen: gatewayToken ? buildConnectRequest(gatewayToken) : undefined,
     onConnected: () => {
       handshakeCompleteRef.current = false;
+      setHandshakeComplete(false);
     },
     onMessage: (message) => {
       // ── Handle connect handshake ──────────────────────────────────
       if (message.type === 'res' && !handshakeCompleteRef.current) {
         if (message.ok) {
           handshakeCompleteRef.current = true;
+          setHandshakeComplete(true);
           console.info('[OpenClaw] Gateway handshake complete');
         } else {
           console.error('[OpenClaw] Gateway handshake failed:', message.error);
@@ -136,7 +211,7 @@ export function ClawdChatInterface() {
         return;
       }
 
-      // ── Handle RPC responses (chat.send ack, etc.) ───────────────
+      // ── Handle RPC responses (chat.send ack, etc.) ─────────────────
       if (message.type === 'res' && typeof message.id === 'string') {
         if (pendingRequestIdsRef.current.has(message.id)) {
           pendingRequestIdsRef.current.delete(message.id);
@@ -221,11 +296,86 @@ export function ClawdChatInterface() {
         }
         return;
       }
+
+      // ── Handle agent streaming events ─────────────────────────────
+      // Agent events carry cumulative text in { data: { text, delta } }
+      if (message.type === 'event' && message.event === 'agent') {
+        const payload = message.payload as Record<string, unknown> | undefined;
+        if (!payload) return;
+
+        const text = extractTextFromMessage(payload);
+        if (typeof text !== 'string') return;
+
+        setMessages((current) => {
+          if (!streamingMessageIdRef.current) {
+            const id = crypto.randomUUID();
+            streamingMessageIdRef.current = id;
+            return [...current, { id, role: 'assistant', content: text }];
+          }
+          return current.map((entry) =>
+            entry.id === streamingMessageIdRef.current ? { ...entry, content: text } : entry,
+          );
+        });
+        return;
+      }
+
+      // ── Silently ignore noisy periodic events ─────────────────────
+      if (message.type === 'event' && (message.event === 'health' || message.event === 'tick')) {
+        return;
+      }
+
+      // ── Catch-all: log any unhandled messages for debugging ──────
+      console.info('[OpenClaw] Unhandled WS message:', JSON.stringify(message).slice(0, 500));
     },
   });
 
   // Keep sendRef in sync for challenge-response fallback
   sendRef.current = send;
+
+  // Fetch available models directly from Ollama on KILO
+  const fetchModels = useCallback(() => {
+    fetch('http://localhost:11434/api/tags')
+      .then((res) => res.json())
+      .then((data: { models?: { name: string; details?: { parameter_size?: string; family?: string } }[] }) => {
+        const list: ModelEntry[] = (data.models ?? []).map((m) => ({
+          id: m.name,
+          name: m.name,
+          parameterSize: m.details?.parameter_size,
+          family: m.details?.family,
+        }));
+        setModels(list);
+      })
+      .catch((err) => {
+        console.error('[Zuberi] Failed to fetch Ollama models:', err);
+      });
+  }, []);
+
+  // Auto-refresh models every 30s
+  useEffect(() => {
+    if (!handshakeComplete) return;
+    fetchModels();
+    const id = setInterval(fetchModels, 30_000);
+    return () => clearInterval(id);
+  }, [handshakeComplete, fetchModels]);
+
+  // Clear GPU — unload all loaded models from Ollama
+  const handleClearGpu = useCallback(async () => {
+    try {
+      const psRes = await fetch('http://localhost:11434/api/ps');
+      const psData: { models?: { name: string }[] } = await psRes.json();
+      const loaded = psData.models ?? [];
+      for (const m of loaded) {
+        await fetch('http://localhost:11434/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model: m.name, prompt: '', stream: false, keep_alive: '0' }),
+        });
+      }
+      console.info('[Zuberi] GPU cleared — unloaded', loaded.length, 'models');
+    } catch (err) {
+      console.error('[Zuberi] Failed to clear GPU:', err);
+    }
+  }, []);
 
   useEffect(() => {
     const node = textareaRef.current;
@@ -278,8 +428,8 @@ export function ClawdChatInterface() {
     // Send as OpenClaw RPC: chat.send
     const requestId = crypto.randomUUID();
     pendingRequestIdsRef.current.add(requestId);
-    send({
-      type: 'req',
+    const frame = {
+      type: 'req' as const,
       id: requestId,
       method: 'chat.send',
       params: {
@@ -288,7 +438,10 @@ export function ClawdChatInterface() {
         idempotencyKey: runId,
         deliver: false,
       },
-    });
+    };
+    console.info('[OpenClaw] SEND chat.send →', JSON.stringify(frame));
+    console.info('[OpenClaw] SEND state: connectionState=%s handshakeComplete=%s', connectionState, handshakeComplete);
+    send(frame);
 
     setDraft('');
   };
@@ -339,10 +492,22 @@ export function ClawdChatInterface() {
             style={{ userSelect: 'text' }}
           />
 
-          <div className="mt-3 flex items-center justify-end gap-3">
-            <Button type="submit" disabled={!draft.trim()} className="rounded-none bg-[#e6dbcb] text-[#1f1f1d] hover:bg-[#d5cbbd]">
-              Send
-            </Button>
+          <div className="mt-3 flex items-center justify-between gap-3">
+            <ModeSelector send={send} sessionKey={SESSION_KEY} />
+            <div className="flex items-center gap-3">
+              <GpuStatus />
+              <ModelSelector
+                send={send}
+                isConnected={handshakeComplete}
+                sessionKey={SESSION_KEY}
+                models={models}
+                onClearGpu={handleClearGpu}
+                onOpen={fetchModels}
+              />
+              <Button type="submit" disabled={!draft.trim()} className="rounded-none bg-[#e6dbcb] text-[#1f1f1d] hover:bg-[#d5cbbd]">
+                Send
+              </Button>
+            </div>
           </div>
         </div>
       </form>

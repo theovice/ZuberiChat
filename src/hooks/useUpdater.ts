@@ -25,8 +25,8 @@ export function useUpdater() {
         updateRef.current = update;
         setUpdateAvailable(true);
       } catch (err) {
-        // Silent failure — don't bother the user if update check fails
-        console.warn("[updater] Update check failed:", err);
+        // Expected in dev or before first release — log at debug level
+        console.debug("[updater] Update check failed:", err);
       }
     }
 

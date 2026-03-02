@@ -123,13 +123,9 @@ input, textarea, [contenteditable="true"] {
   border-radius: 0;
 }
 
-/* ── Custom Titlebar (overlay) ─────────────────────────── */
+/* ── App Toolbar (kanban toggle, update indicator) ─────── */
 
 .titlebar {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
   height: 36px;
   display: flex;
   align-items: center;
@@ -138,7 +134,6 @@ input, textarea, [contenteditable="true"] {
   color: var(--text-secondary);
   user-select: none;
   -webkit-user-select: none;
-  z-index: 9999;
   font-family: system-ui, -apple-system, sans-serif;
 }
 
