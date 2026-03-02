@@ -3,6 +3,7 @@
 use serde_json::Value;
 use std::fs;
 use std::path::PathBuf;
+use std::process::Command;
 use tauri::menu::{AboutMetadataBuilder, MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
 use tauri::{Emitter, Manager};
 
@@ -52,6 +53,59 @@ fn toggle_devtools(window: tauri::WebviewWindow) {
     }
 }
 
+/// Save an uploaded file to the workspace uploads directory.
+/// The frontend reads the file with FileReader and passes raw bytes here.
+#[tauri::command]
+fn save_upload(filename: String, contents: Vec<u8>) -> Result<String, String> {
+    let upload_dir = PathBuf::from(r"C:\Users\PLUTO\openclaw_workspace\uploads");
+    fs::create_dir_all(&upload_dir)
+        .map_err(|e| format!("Failed to create uploads dir: {}", e))?;
+
+    // Sanitize filename — strip path separators
+    let safe_name = filename
+        .replace(['/', '\\', ':', '*', '?', '"', '<', '>', '|'], "_");
+    let dest = upload_dir.join(&safe_name);
+
+    fs::write(&dest, &contents)
+        .map_err(|e| format!("Failed to write {}: {}", dest.display(), e))?;
+
+    let dest_str = dest.to_string_lossy().to_string();
+    println!("[Zuberi] Saved upload: {} ({} bytes)", dest_str, contents.len());
+    Ok(dest_str)
+}
+
+/// Sync a local file to the CEG server via scp.
+/// Runs: scp <local_path> ceg@100.100.101.1:/opt/zuberi/files/
+#[tauri::command]
+fn sync_to_ceg(local_path: String) -> Result<String, String> {
+    let remote = "ceg@100.100.101.1:/opt/zuberi/files/";
+
+    // Ensure remote directory exists
+    let mkdir_status = Command::new("ssh")
+        .args(["ceg@100.100.101.1", "mkdir", "-p", "/opt/zuberi/files"])
+        .status()
+        .map_err(|e| format!("Failed to run ssh mkdir: {}", e))?;
+
+    if !mkdir_status.success() {
+        eprintln!("[Zuberi] Warning: ssh mkdir returned non-zero (dir may already exist)");
+    }
+
+    // scp the file
+    let output = Command::new("scp")
+        .args([&local_path, remote])
+        .output()
+        .map_err(|e| format!("Failed to run scp: {}", e))?;
+
+    if output.status.success() {
+        let msg = format!("[Zuberi] Synced to CEG: {} → {}", local_path, remote);
+        println!("{}", msg);
+        Ok(msg)
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(format!("scp failed: {}", stderr))
+    }
+}
+
 /// Read the gateway token from .openclaw.local.json.
 #[tauri::command]
 fn read_gateway_token() -> Result<String, String> {
@@ -74,7 +128,7 @@ fn main() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![read_gateway_token, open_url_in_browser, toggle_devtools])
+        .invoke_handler(tauri::generate_handler![read_gateway_token, open_url_in_browser, toggle_devtools, save_upload, sync_to_ceg])
         .setup(|app| {
             let handle = app.handle();
 

@@ -103,7 +103,7 @@ describe('ClawdChatInterface', () => {
   it('has a chat input field', async () => {
     const { ClawdChatInterface } = await import('@/components/chat/ClawdChatInterface');
     render(<ClawdChatInterface />);
-    const input = screen.getByPlaceholderText('How can I help you today?');
+    const input = screen.getByPlaceholderText('Reply...');
     expect(input).toBeInTheDocument();
   });
 
@@ -209,7 +209,36 @@ describe('GpuStatus', () => {
 });
 
 // ============================================================================
-// 4. APP MOUNT SMOKE TEST
+// 4. FILE ATTACHMENTS SMOKE TEST
+// ============================================================================
+describe('FileAttachments', () => {
+  it('AttachButton renders with paperclip icon', async () => {
+    const { AttachButton } = await import('@/components/chat/FileAttachments');
+    render(<AttachButton onFiles={vi.fn()} />);
+    const button = screen.getByRole('button', { name: /attach files/i });
+    expect(button).toBeInTheDocument();
+  });
+
+  it('FileChips renders file badges when files are queued', async () => {
+    const { FileChips } = await import('@/components/chat/FileAttachments');
+    const files = [
+      { id: '1', file: new File(['hello'], 'test.txt'), name: 'test.txt', size: 5, status: 'pending' as const },
+      { id: '2', file: new File(['world'], 'image.png'), name: 'image.png', size: 5, status: 'done' as const },
+    ];
+    render(<FileChips files={files} onRemove={vi.fn()} />);
+    expect(screen.getByText('test.txt')).toBeInTheDocument();
+    expect(screen.getByText('image.png')).toBeInTheDocument();
+  });
+
+  it('FileChips renders nothing when no files queued', async () => {
+    const { FileChips } = await import('@/components/chat/FileAttachments');
+    const { container } = render(<FileChips files={[]} onRemove={vi.fn()} />);
+    expect(container.innerHTML).toBe('');
+  });
+});
+
+// ============================================================================
+// 5. APP MOUNT SMOKE TEST
 // ============================================================================
 describe('App mount', () => {
   it('does not crash when mounting the main chat interface', async () => {

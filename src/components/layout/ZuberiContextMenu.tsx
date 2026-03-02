@@ -116,7 +116,7 @@ export function ZuberiContextMenu({ onNewConversation, children }: Props) {
     {
       label: 'Kanban',
       action: () => {
-        invoke('open_url_in_browser', { url: 'http://localhost:3000' }).catch(
+        invoke('open_url_in_browser', { url: 'http://localhost:3001' }).catch(
           console.error,
         );
         close();

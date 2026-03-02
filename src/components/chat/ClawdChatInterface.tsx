@@ -8,6 +8,7 @@ import { ModelSelector } from '@/components/chat/ModelSelector';
 import { ModeSelector } from '@/components/chat/ModeSelector';
 import { GpuStatus } from '@/components/chat/GpuStatus';
 import { ZuberiContextMenu } from '@/components/layout/ZuberiContextMenu';
+import { AttachButton, FileChips, type QueuedFile } from '@/components/chat/FileAttachments';
 
 type ChatRole = 'user' | 'assistant';
 
@@ -109,11 +110,15 @@ export function ClawdChatInterface() {
   const pendingRequestIdsRef = useRef<Set<string>>(new Set());
   // Models state — populated from Ollama API on KILO
   const [models, setModels] = useState<ModelEntry[]>([]);
+  // File attachment state
+  const [queuedFiles, setQueuedFiles] = useState<QueuedFile[]>([]);
+  const [isDragOver, setIsDragOver] = useState(false);
 
   // ── New Conversation handler (shared between menu event and context menu) ──
   const handleNewConversation = useCallback(() => {
     setMessages([]);
     setDraft('');
+    setQueuedFiles([]);
     activeRunIdRef.current = null;
     streamingMessageIdRef.current = null;
     pendingRequestIdsRef.current.clear();
@@ -389,6 +394,98 @@ export function ClawdChatInterface() {
     node.style.overflowY = sh > maxH ? 'auto' : 'hidden';
   }, [draft]);
 
+  // ── File attachment helpers ─────────────────────────────────────
+  const processFiles = useCallback((fileList: FileList) => {
+    const newFiles: QueuedFile[] = Array.from(fileList).map((file) => ({
+      id: crypto.randomUUID(),
+      file,
+      name: file.name,
+      size: file.size,
+      status: 'pending' as const,
+    }));
+    setQueuedFiles((prev) => [...prev, ...newFiles]);
+  }, []);
+
+  const removeFile = useCallback((id: string) => {
+    setQueuedFiles((prev) => prev.filter((f) => f.id !== id));
+  }, []);
+
+  /** Read file as ArrayBuffer, invoke save_upload, then sync_to_ceg */
+  const uploadFile = useCallback(async (qf: QueuedFile): Promise<string | null> => {
+    setQueuedFiles((prev) =>
+      prev.map((f) => (f.id === qf.id ? { ...f, status: 'uploading' as const } : f)),
+    );
+    try {
+      const buf = await qf.file.arrayBuffer();
+      const bytes = Array.from(new Uint8Array(buf));
+      const localPath = await invoke<string>('save_upload', {
+        filename: qf.name,
+        contents: bytes,
+      });
+      setQueuedFiles((prev) =>
+        prev.map((f) => (f.id === qf.id ? { ...f, status: 'done' as const, localPath } : f)),
+      );
+      // Fire CEG sync in background (best-effort)
+      invoke<string>('sync_to_ceg', { localPath }).catch((err) => {
+        console.error('[Zuberi] CEG sync failed for', qf.name, err);
+      });
+      return localPath;
+    } catch (err) {
+      console.error('[Zuberi] Upload failed for', qf.name, err);
+      setQueuedFiles((prev) =>
+        prev.map((f) => (f.id === qf.id ? { ...f, status: 'error' as const } : f)),
+      );
+      return null;
+    }
+  }, []);
+
+  // ── Drag & drop handlers ──────────────────────────────────────
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+  }, []);
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragOver(false);
+      if (e.dataTransfer.files.length > 0) {
+        processFiles(e.dataTransfer.files);
+      }
+    },
+    [processFiles],
+  );
+
+  // ── Paste handler (images from clipboard) ─────────────────────
+  const handlePaste = useCallback(
+    (e: React.ClipboardEvent) => {
+      const items = e.clipboardData.items;
+      const fileItems: File[] = [];
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].kind === 'file') {
+          const file = items[i].getAsFile();
+          if (file) fileItems.push(file);
+        }
+      }
+      if (fileItems.length > 0) {
+        // Create a DataTransfer-like FileList from the collected files
+        const dt = new DataTransfer();
+        fileItems.forEach((f) => dt.items.add(f));
+        processFiles(dt.files);
+      }
+      // Don't preventDefault — let text paste still work
+    },
+    [processFiles],
+  );
+
   // Map WebSocket connectionState to ConnectionStatus prop
   // - Token loading (gatewayToken===null) → 'connecting' (not disconnected)
   // - First connect attempt → 'connecting'
@@ -411,10 +508,32 @@ export function ClawdChatInterface() {
     return mapped;
   }, [connectionState, gatewayToken]);
 
-  const handleSubmit = (event: FormEvent) => {
+  const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    const message = draft.trim();
-    if (!message) return;
+    const text = draft.trim();
+    const hasFiles = queuedFiles.length > 0;
+    if (!text && !hasFiles) return;
+
+    // Upload all pending files first
+    const attachRefs: string[] = [];
+    if (hasFiles) {
+      const pendingFiles = queuedFiles.filter((f) => f.status === 'pending' || f.status === 'error');
+      for (const qf of pendingFiles) {
+        const localPath = await uploadFile(qf);
+        if (localPath) {
+          // Extract just the uploads/filename part for the text reference
+          const uploadsIdx = localPath.replace(/\\/g, '/').lastIndexOf('uploads/');
+          const ref = uploadsIdx >= 0 ? localPath.replace(/\\/g, '/').slice(uploadsIdx) : qf.name;
+          attachRefs.push(`[Attached: ${ref}]`);
+        }
+      }
+    }
+
+    // Build the message with attachment references
+    const attachBlock = attachRefs.length > 0 ? '\n' + attachRefs.join('\n') : '';
+    const message = text + attachBlock;
+
+    if (!message.trim()) return;
 
     const userMessage: ChatMessage = {
       id: crypto.randomUUID(),
@@ -448,6 +567,7 @@ export function ClawdChatInterface() {
     send(frame);
 
     setDraft('');
+    setQueuedFiles([]);
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -489,36 +609,56 @@ export function ClawdChatInterface() {
         </div>
       </div>
 
-      {/* ── Compact Chat Input (Claude.ai style) ── */}
-      <form onSubmit={handleSubmit} style={{ flexShrink: 0, paddingBottom: 16, paddingTop: 8 }}>
+      {/* ── Chat Input (Claude Code style) with drag-drop zone ── */}
+      <form
+        onSubmit={handleSubmit}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        style={{ flexShrink: 0, paddingBottom: 16, paddingTop: 8 }}
+      >
         <div className="mx-auto max-w-3xl">
-          {/* Input container */}
-          <div className="relative border border-[#4a4947] bg-[#31302e]" style={{ padding: '10px 48px 10px 14px' }}>
+          {/* Input container — rounded, no buttons inside */}
+          <div
+            className="relative overflow-hidden border bg-[#2b2a28]"
+            style={{
+              padding: '12px 14px',
+              borderColor: isDragOver ? '#f0a020' : '#3a3938',
+              borderRadius: 12,
+              transition: 'border-color 150ms',
+            }}
+          >
+            {/* File chips (above the textarea when files are queued) */}
+            <FileChips files={queuedFiles} onRemove={removeFile} />
+
             <textarea
               ref={textareaRef}
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
               rows={1}
-              placeholder="How can I help you today?"
-              className="w-full resize-none border-none bg-transparent text-sm text-[#e6dbcb] placeholder:text-[#b0afae] outline-none focus:ring-0 focus-visible:ring-0"
+              placeholder="Reply..."
+              className="w-full resize-none border-none bg-transparent text-sm text-[#e6dbcb] placeholder:text-[#7a7977] outline-none focus:ring-0 focus-visible:ring-0"
               style={{ minHeight: '22px', maxHeight: '132px', lineHeight: '22px', userSelect: 'text' }}
             />
-            {/* Send button — icon inside the input area */}
-            <button
-              type="submit"
-              disabled={!draft.trim()}
-              aria-label="Send"
-              className="absolute bottom-2.5 right-2.5 flex h-7 w-7 items-center justify-center bg-[#e6dbcb] text-[#1f1f1d] transition-colors hover:bg-[#d5cbbd] disabled:opacity-30"
-            >
-              <ArrowUp size={14} />
-            </button>
+
+            {/* Drag-over overlay */}
+            {isDragOver && (
+              <div
+                className="absolute inset-0 flex items-center justify-center text-sm text-[#f0a020]"
+                style={{ pointerEvents: 'none', zIndex: 10, background: 'rgba(43,42,40,0.92)', borderRadius: 12 }}
+              >
+                Drop files to attach
+              </div>
+            )}
           </div>
 
-          {/* Controls row — compact, below input */}
-          <div className="mt-1.5 flex items-center gap-3 px-1">
+          {/* Controls row — Claude Code style: [+] [ModeSelector] ... [GpuStatus] [Model ▾] [Send] */}
+          <div className="mt-1.5 flex items-center gap-2 px-0.5">
+            <AttachButton onFiles={processFiles} />
             <ModeSelector send={send} sessionKey={SESSION_KEY} />
-            <div className="ml-auto flex items-center gap-3">
+            <div className="ml-auto flex items-center gap-2">
               <GpuStatus />
               <ModelSelector
                 send={send}
@@ -528,6 +668,18 @@ export function ClawdChatInterface() {
                 onClearGpu={handleClearGpu}
                 onOpen={fetchModels}
               />
+              {/* Send button — coral, Claude Code style */}
+              <button
+                type="submit"
+                disabled={!draft.trim() && queuedFiles.length === 0}
+                aria-label="Send"
+                className="flex h-7 w-7 items-center justify-center rounded-md transition-colors disabled:opacity-30"
+                style={{
+                  backgroundColor: (!draft.trim() && queuedFiles.length === 0) ? '#4a4947' : '#D9654B',
+                }}
+              >
+                <ArrowUp size={14} color="#ffffff" />
+              </button>
             </div>
           </div>
         </div>
