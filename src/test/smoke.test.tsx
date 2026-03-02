@@ -19,11 +19,16 @@ vi.mock('@tauri-apps/api/core', () => ({
 
 vi.mock('@tauri-apps/api/event', () => ({
   listen: vi.fn().mockResolvedValue(() => {}),
+  emit: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('@tauri-apps/api/window', () => ({
   getCurrentWindow: vi.fn().mockReturnValue({
     close: vi.fn(),
+    minimize: vi.fn(),
+    maximize: vi.fn(),
+    unmaximize: vi.fn(),
+    isMaximized: vi.fn().mockResolvedValue(false),
     isFullscreen: vi.fn().mockResolvedValue(false),
     setFullscreen: vi.fn(),
   }),

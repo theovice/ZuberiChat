@@ -618,13 +618,13 @@ export function ClawdChatInterface() {
         style={{ flexShrink: 0, paddingBottom: 16, paddingTop: 8 }}
       >
         <div className="mx-auto max-w-3xl">
-          {/* Input container — rounded, no buttons inside */}
+          {/* Input container — standalone rounded box, nothing but content inside */}
           <div
+            data-rounded
             className="relative overflow-hidden border bg-[#2b2a28]"
             style={{
               padding: '12px 14px',
               borderColor: isDragOver ? '#f0a020' : '#3a3938',
-              borderRadius: 12,
               transition: 'border-color 150ms',
             }}
           >
@@ -654,8 +654,8 @@ export function ClawdChatInterface() {
             )}
           </div>
 
-          {/* Controls row — Claude Code style: [+] [ModeSelector] ... [GpuStatus] [Model ▾] [Send] */}
-          <div className="mt-1.5 flex items-center gap-2 px-0.5">
+          {/* Toolbar row — separate from input, Claude Code style */}
+          <div className="mt-2 flex items-center gap-2 px-0.5">
             <AttachButton onFiles={processFiles} />
             <ModeSelector send={send} sessionKey={SESSION_KEY} />
             <div className="ml-auto flex items-center gap-2">
