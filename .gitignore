@@ -13,3 +13,12 @@ nul
 *.sig
 *.key
 *.key.pub
+
+# Zuberi workspace identity files (belong in openclaw_workspace, not repo)
+AGENTS.md
+HEARTBEAT.md
+HORIZON.md
+INFRASTRUCTURE.md
+MEMORY.md
+SOUL.md
+TOOLS.md

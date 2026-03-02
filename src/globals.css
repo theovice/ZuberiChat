@@ -261,3 +261,54 @@ input, textarea, [contenteditable="true"] {
 .ghost-messages {
   scrollbar-width: none;
 }
+
+/* ── Context Menu ─────────────────────────────────────── */
+.ctx-menu {
+  background: var(--surface-1);
+  border: 1px solid var(--border-medium);
+  padding: 4px 0;
+  min-width: 180px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.ctx-menu-item {
+  display: flex;
+  align-items: center;
+  padding: 6px 14px;
+  font-size: 13px;
+  color: var(--text-primary);
+  cursor: pointer;
+  position: relative;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.ctx-menu-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.ctx-menu-separator {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 4px 8px;
+}
+
+.ctx-menu-shortcut {
+  margin-left: auto;
+  padding-left: 24px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.ctx-menu-arrow {
+  margin-left: auto;
+  padding-left: 16px;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.ctx-submenu {
+  position: absolute;
+  left: 100%;
+  top: 0;
+}

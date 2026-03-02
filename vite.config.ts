@@ -88,6 +88,12 @@ export default defineConfig({
         SHARED_SRC,
         "index.ts",
       ),
+      // Pin React to the root copy so the Kanban subtree (which has its own
+      // node_modules via pnpm workspace isolation) doesn't pull in a second
+      // React instance.  This is required on top of `dedupe` because pnpm's
+      // strict resolution can still hand @dnd-kit a different physical path.
+      "react": path.resolve(__dirname, "node_modules/react"),
+      "react-dom": path.resolve(__dirname, "node_modules/react-dom"),
     },
     // Force all modules (including @dnd-kit/core inside the Kanban subtree)
     // to share a single React instance — prevents "Invalid hook call" errors.

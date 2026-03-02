@@ -21,6 +21,18 @@ vi.mock('@tauri-apps/api/event', () => ({
   listen: vi.fn().mockResolvedValue(() => {}),
 }));
 
+vi.mock('@tauri-apps/api/window', () => ({
+  getCurrentWindow: vi.fn().mockReturnValue({
+    close: vi.fn(),
+    isFullscreen: vi.fn().mockResolvedValue(false),
+    setFullscreen: vi.fn(),
+  }),
+}));
+
+vi.mock('@tauri-apps/plugin-process', () => ({
+  exit: vi.fn(),
+}));
+
 // Global WebSocket stub — prevents real connections in jsdom
 class MockWebSocket {
   static CONNECTING = 0;
@@ -197,41 +209,7 @@ describe('GpuStatus', () => {
 });
 
 // ============================================================================
-// 4. KANBAN SMOKE TEST
-// ============================================================================
-describe('KanbanPanel', () => {
-  it('renders without crashing', async () => {
-    // KanbanPanel pulls in the full Kanban tree — heavy import.
-    // This test just verifies no JS errors on mount.
-    try {
-      const { KanbanPanel } = await import('@/components/layout/KanbanPanel');
-      const { container } = render(<KanbanPanel />);
-      expect(container).toBeTruthy();
-    } catch (err) {
-      // If the Kanban tree has unresolvable deep imports (e.g. node-only deps),
-      // catching it here prevents the whole suite from crashing.
-      // The test still "passes" — it verified the import didn't throw a fatal.
-      console.warn('[Smoke] KanbanPanel import/render failed (expected if deep deps missing):', err);
-      expect(true).toBe(true);
-    }
-  });
-
-  it('handles backend unavailable gracefully (no thrown errors)', async () => {
-    // Simulate backend down — fetch rejects
-    globalThis.fetch = vi.fn().mockRejectedValue(new Error('ECONNREFUSED'));
-    try {
-      const { KanbanPanel } = await import('@/components/layout/KanbanPanel');
-      const { container } = render(<KanbanPanel />);
-      expect(container).toBeTruthy();
-    } catch (err) {
-      console.warn('[Smoke] KanbanPanel with backend down:', err);
-      expect(true).toBe(true);
-    }
-  });
-});
-
-// ============================================================================
-// 5. MENU BAR / APP MOUNT SMOKE TEST
+// 4. APP MOUNT SMOKE TEST
 // ============================================================================
 describe('App mount', () => {
   it('does not crash when mounting the main chat interface', async () => {

@@ -35,6 +35,23 @@ fn find_config() -> Result<PathBuf, String> {
     Err("Could not find .openclaw.local.json".to_string())
 }
 
+/// Open a URL in the system default browser.
+#[tauri::command]
+fn open_url_in_browser(url: String) -> Result<(), String> {
+    tauri_plugin_opener::open_url(&url, None::<&str>)
+        .map_err(|e| format!("Failed to open URL: {}", e))
+}
+
+/// Toggle the developer tools window.
+#[tauri::command]
+fn toggle_devtools(window: tauri::WebviewWindow) {
+    if window.is_devtools_open() {
+        window.close_devtools();
+    } else {
+        window.open_devtools();
+    }
+}
+
 /// Read the gateway token from .openclaw.local.json.
 #[tauri::command]
 fn read_gateway_token() -> Result<String, String> {
@@ -57,7 +74,7 @@ fn main() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![read_gateway_token])
+        .invoke_handler(tauri::generate_handler![read_gateway_token, open_url_in_browser, toggle_devtools])
         .setup(|app| {
             let handle = app.handle();
 

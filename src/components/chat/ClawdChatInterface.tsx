@@ -1,13 +1,13 @@
 import { FormEvent, KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
+import { ArrowUp } from 'lucide-react';
 import { useWebSocket, type WebSocketMessage } from '@/hooks/useWebSocket';
 import { ConnectionStatus } from '@/components/chat/ConnectionStatus';
 import { ModelSelector } from '@/components/chat/ModelSelector';
 import { ModeSelector } from '@/components/chat/ModeSelector';
 import { GpuStatus } from '@/components/chat/GpuStatus';
+import { ZuberiContextMenu } from '@/components/layout/ZuberiContextMenu';
 
 type ChatRole = 'user' | 'assistant';
 
@@ -110,6 +110,16 @@ export function ClawdChatInterface() {
   // Models state — populated from Ollama API on KILO
   const [models, setModels] = useState<ModelEntry[]>([]);
 
+  // ── New Conversation handler (shared between menu event and context menu) ──
+  const handleNewConversation = useCallback(() => {
+    setMessages([]);
+    setDraft('');
+    activeRunIdRef.current = null;
+    streamingMessageIdRef.current = null;
+    pendingRequestIdsRef.current.clear();
+    console.info('[Zuberi] New conversation started');
+  }, []);
+
   // Load token from .openclaw.local.json via Tauri IPC on mount
   useEffect(() => {
     invoke<string>('read_gateway_token')
@@ -128,16 +138,7 @@ export function ClawdChatInterface() {
     const unlisteners: Promise<() => void>[] = [];
 
     // New Conversation: clear chat and reset streaming state
-    unlisteners.push(
-      listen('new-conversation', () => {
-        setMessages([]);
-        setDraft('');
-        activeRunIdRef.current = null;
-        streamingMessageIdRef.current = null;
-        pendingRequestIdsRef.current.clear();
-        console.info('[Zuberi] New conversation started');
-      }),
-    );
+    unlisteners.push(listen('new-conversation', handleNewConversation));
 
     // Open Settings (placeholder — no settings panel yet)
     unlisteners.push(
@@ -167,7 +168,7 @@ export function ClawdChatInterface() {
     return () => {
       unlisteners.forEach((p) => p.then((fn) => fn()));
     };
-  }, []);
+  }, [handleNewConversation]);
 
   // Build WebSocket URL with token query param for gateway auth
   const wsUrl = useMemo(() => {
@@ -377,12 +378,15 @@ export function ClawdChatInterface() {
     }
   }, []);
 
+  // ── Auto-resize textarea: 1 line → max ~6 lines, then scroll ──
   useEffect(() => {
     const node = textareaRef.current;
     if (!node) return;
-
     node.style.height = 'auto';
-    node.style.height = `${Math.min(node.scrollHeight, 200)}px`;
+    const maxH = 132; // ~6 lines at 22px line-height
+    const sh = node.scrollHeight;
+    node.style.height = `${Math.min(sh, maxH)}px`;
+    node.style.overflowY = sh > maxH ? 'auto' : 'hidden';
   }, [draft]);
 
   // Map WebSocket connectionState to ConnectionStatus prop
@@ -455,9 +459,14 @@ export function ClawdChatInterface() {
 
   return (
     <div className="mx-auto flex h-full w-full max-w-4xl flex-col px-6" style={{ overflow: 'visible' }}>
-      <div style={{ paddingTop: 40, flexShrink: 0, overflow: 'visible', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <ConnectionStatus status={connStatus} />
-      </div>
+      {/* ── Logo / Connection Status (right-click for context menu) ── */}
+      <ZuberiContextMenu onNewConversation={handleNewConversation}>
+        <div style={{ paddingTop: 40, flexShrink: 0, overflow: 'visible', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <ConnectionStatus status={connStatus} />
+        </div>
+      </ZuberiContextMenu>
+
+      {/* ── Messages ── */}
       <div className="ghost-messages flex-1 overflow-y-auto px-4" style={{ background: 'transparent' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
           {messages.map((message) => (
@@ -480,21 +489,36 @@ export function ClawdChatInterface() {
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} style={{ flexShrink: 0, paddingBottom: 12, paddingTop: 8 }}>
-        <div className="border border-[#4a4947] bg-[#31302e] p-3">
-          <Textarea
-            ref={textareaRef}
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="How can I help you today?"
-            className="max-h-[200px] min-h-[44px] resize-none border-none bg-transparent px-0 text-sm text-[#e6dbcb] placeholder:text-[#b0afae] focus-visible:ring-0"
-            style={{ userSelect: 'text' }}
-          />
+      {/* ── Compact Chat Input (Claude.ai style) ── */}
+      <form onSubmit={handleSubmit} style={{ flexShrink: 0, paddingBottom: 16, paddingTop: 8 }}>
+        <div className="mx-auto max-w-3xl">
+          {/* Input container */}
+          <div className="relative border border-[#4a4947] bg-[#31302e]" style={{ padding: '10px 48px 10px 14px' }}>
+            <textarea
+              ref={textareaRef}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={handleKeyDown}
+              rows={1}
+              placeholder="How can I help you today?"
+              className="w-full resize-none border-none bg-transparent text-sm text-[#e6dbcb] placeholder:text-[#b0afae] outline-none focus:ring-0 focus-visible:ring-0"
+              style={{ minHeight: '22px', maxHeight: '132px', lineHeight: '22px', userSelect: 'text' }}
+            />
+            {/* Send button — icon inside the input area */}
+            <button
+              type="submit"
+              disabled={!draft.trim()}
+              aria-label="Send"
+              className="absolute bottom-2.5 right-2.5 flex h-7 w-7 items-center justify-center bg-[#e6dbcb] text-[#1f1f1d] transition-colors hover:bg-[#d5cbbd] disabled:opacity-30"
+            >
+              <ArrowUp size={14} />
+            </button>
+          </div>
 
-          <div className="mt-3 flex items-center justify-between gap-3">
+          {/* Controls row — compact, below input */}
+          <div className="mt-1.5 flex items-center gap-3 px-1">
             <ModeSelector send={send} sessionKey={SESSION_KEY} />
-            <div className="flex items-center gap-3">
+            <div className="ml-auto flex items-center gap-3">
               <GpuStatus />
               <ModelSelector
                 send={send}
@@ -504,9 +528,6 @@ export function ClawdChatInterface() {
                 onClearGpu={handleClearGpu}
                 onOpen={fetchModels}
               />
-              <Button type="submit" disabled={!draft.trim()} className="rounded-none bg-[#e6dbcb] text-[#1f1f1d] hover:bg-[#d5cbbd]">
-                Send
-              </Button>
             </div>
           </div>
         </div>
