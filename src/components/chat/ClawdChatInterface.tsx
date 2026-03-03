@@ -1,12 +1,12 @@
 import { FormEvent, KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { ArrowUp } from 'lucide-react';
+import { ArrowUp, Monitor, Cloud } from 'lucide-react';
 import { useWebSocket, type WebSocketMessage } from '@/hooks/useWebSocket';
 import { ConnectionStatus } from '@/components/chat/ConnectionStatus';
 import { ModelSelector } from '@/components/chat/ModelSelector';
 import { ModeSelector } from '@/components/chat/ModeSelector';
-import { GpuStatus } from '@/components/chat/GpuStatus';
+// GpuStatus removed from toolbar — component kept for future use
 import { ZuberiContextMenu } from '@/components/layout/ZuberiContextMenu';
 import { AttachButton, FileChips, type QueuedFile } from '@/components/chat/FileAttachments';
 
@@ -659,7 +659,6 @@ export function ClawdChatInterface() {
             <AttachButton onFiles={processFiles} />
             <ModeSelector send={send} sessionKey={SESSION_KEY} />
             <div className="ml-auto flex items-center gap-2">
-              <GpuStatus />
               <ModelSelector
                 send={send}
                 isConnected={handshakeComplete}
@@ -673,7 +672,7 @@ export function ClawdChatInterface() {
                 type="submit"
                 disabled={!draft.trim() && queuedFiles.length === 0}
                 aria-label="Send"
-                className="flex h-7 w-7 items-center justify-center rounded-md transition-colors disabled:opacity-30"
+                className="btn-circle flex h-7 w-7 items-center justify-center transition-colors disabled:opacity-30"
                 style={{
                   backgroundColor: (!draft.trim() && queuedFiles.length === 0) ? '#4a4947' : '#D9654B',
                 }}
@@ -681,6 +680,18 @@ export function ClawdChatInterface() {
                 <ArrowUp size={14} color="#ffffff" />
               </button>
             </div>
+          </div>
+
+          {/* Status bar — working directory + connectivity */}
+          <div className="mt-1 flex items-center justify-between px-1" style={{ fontSize: 10, color: '#666564' }}>
+            <div className="flex items-center gap-1">
+              <Monitor size={10} className="shrink-0 text-[#666564]" />
+              <span className="truncate" style={{ maxWidth: 300 }}>C:\</span>
+            </div>
+            <Cloud
+              size={12}
+              className={connStatus === 'connected' ? 'text-[#4ade80]' : 'text-[#666564]'}
+            />
           </div>
         </div>
       </form>

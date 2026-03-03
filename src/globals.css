@@ -499,3 +499,8 @@ input, textarea, [contenteditable="true"] {
 [data-rounded] {
   border-radius: 12px !important;
 }
+
+/* ── Circular button opt-in ──────────────────────────────── */
+.btn-circle {
+  border-radius: 50% !important;
+}

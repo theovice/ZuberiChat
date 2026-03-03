@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Settings } from 'lucide-react';
 import type { WebSocketMessage } from '@/hooks/useWebSocket';
 
 type ModeOption = {
@@ -41,16 +42,19 @@ export function ModeSelector({ send, sessionKey }: ModeSelectorProps) {
   };
 
   return (
-    <select
-      value={selectedMode}
-      onChange={handleModeChange}
-      className="h-8 w-[180px] border border-[#4a4947] bg-[#2b2a28] px-2 text-xs text-[#b0afae] outline-none focus:ring-0"
-    >
-      {MODE_OPTIONS.map((opt) => (
-        <option key={opt.value} value={opt.value}>
-          {opt.label}
-        </option>
-      ))}
-    </select>
+    <div className="flex items-center gap-1">
+      <Settings size={13} className="shrink-0 text-[#807e7c]" />
+      <select
+        value={selectedMode}
+        onChange={handleModeChange}
+        className="h-7 w-[130px] border border-[#4a4947] bg-[#2b2a28] px-1.5 text-xs text-[#b0afae] outline-none focus:ring-0"
+      >
+        {MODE_OPTIONS.map((opt) => (
+          <option key={opt.value} value={opt.value}>
+            {opt.label}
+          </option>
+        ))}
+      </select>
+    </div>
   );
 }

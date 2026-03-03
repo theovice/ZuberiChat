@@ -162,7 +162,7 @@ describe('ModelSelector', () => {
       />,
     );
     expect(screen.getByText(/qwen3:14b-fast/)).toBeInTheDocument();
-    expect(screen.getByText(/qwen3:14b \(/)).toBeInTheDocument();
+    expect(screen.getByText('qwen3:14b')).toBeInTheDocument();
   });
 
   it('shows Clear GPU option when models are loaded', async () => {

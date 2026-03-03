@@ -72,13 +72,13 @@ export function ModelSelector({ send, isConnected, sessionKey, models, onClearGp
       onChange={handleModelChange}
       onFocus={onOpen}
       disabled={loading || models.length === 0}
-      className="h-8 w-[200px] border border-[#4a4947] bg-[#2b2a28] px-2 text-xs text-[#b0afae] outline-none focus:ring-0 disabled:opacity-50"
+      className="h-7 w-[140px] border border-[#4a4947] bg-[#2b2a28] px-2 text-xs text-[#b0afae] outline-none focus:ring-0 disabled:opacity-50"
     >
       {loading && <option value="">Loading...</option>}
       {!loading && models.length === 0 && <option value="">No models</option>}
       {models.map((m) => (
         <option key={m.id} value={m.id}>
-          {m.name}{m.parameterSize ? ` (${m.parameterSize})` : ''}
+          {m.name}
         </option>
       ))}
       {models.length > 0 && (
