@@ -1,7 +1,7 @@
 import { FormEvent, KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { ArrowUp, Monitor, Cloud } from 'lucide-react';
+import { ArrowUp, Monitor, Cpu } from 'lucide-react';
 import { useWebSocket, type WebSocketMessage } from '@/hooks/useWebSocket';
 import { ConnectionStatus } from '@/components/chat/ConnectionStatus';
 import { ModelSelector } from '@/components/chat/ModelSelector';
@@ -110,6 +110,8 @@ export function ClawdChatInterface() {
   const pendingRequestIdsRef = useRef<Set<string>>(new Set());
   // Models state — populated from Ollama API on KILO
   const [models, setModels] = useState<ModelEntry[]>([]);
+  // GPU model loaded in VRAM — polled from Ollama /api/ps
+  const [gpuModel, setGpuModel] = useState<string | null>(null);
   // File attachment state
   const [queuedFiles, setQueuedFiles] = useState<QueuedFile[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -185,23 +187,52 @@ export function ClawdChatInterface() {
     return url;
   }, [gatewayToken]);
 
+  // v2026.3.1+: when the URL contains ?token=, the gateway performs implicit
+  // connect on WebSocket upgrade.  Sending an explicit connect RPC after that
+  // is rejected ("connect is only valid as the first request").  Detect this
+  // and skip the explicit connect, marking handshake complete immediately.
+  const urlHasToken = wsUrl.includes('?token=');
+
   const { send, connectionState } = useWebSocket({
     autoConnect: gatewayToken !== null,
     url: wsUrl,
-    onOpen: gatewayToken ? buildConnectRequest(gatewayToken) : undefined,
+    // Only send explicit connect when URL does NOT carry the token
+    onOpen: !urlHasToken && gatewayToken ? buildConnectRequest(gatewayToken) : undefined,
     onConnected: () => {
-      handshakeCompleteRef.current = false;
-      setHandshakeComplete(false);
+      if (urlHasToken) {
+        // Implicit auth — handshake is already done on upgrade
+        handshakeCompleteRef.current = true;
+        setHandshakeComplete(true);
+        console.info('[OpenClaw] Gateway handshake complete (implicit token auth)');
+      } else {
+        handshakeCompleteRef.current = false;
+        setHandshakeComplete(false);
+      }
     },
     onMessage: (message) => {
-      // ── Handle connect handshake ──────────────────────────────────
-      if (message.type === 'res' && !handshakeCompleteRef.current) {
+      // ── DEBUG: trace every incoming WS message ────────────────────
+      console.info('[WS:RAW]', JSON.stringify(message).slice(0, 800));
+
+      // ── Handle connect handshake (explicit RPC path only) ─────────
+      // Only consume this `res` if it is NOT a known pending RPC id,
+      // which means it is the connect handshake response.  This prevents
+      // chat.send acks from being swallowed when handshake failed.
+      if (
+        message.type === 'res' &&
+        !handshakeCompleteRef.current &&
+        !pendingRequestIdsRef.current.has(message.id as string)
+      ) {
         if (message.ok) {
           handshakeCompleteRef.current = true;
           setHandshakeComplete(true);
-          console.info('[OpenClaw] Gateway handshake complete');
+          console.info('[OpenClaw] Gateway handshake complete (explicit connect)');
         } else {
           console.error('[OpenClaw] Gateway handshake failed:', message.error);
+          // Mark handshake as "done-but-failed" so subsequent res messages
+          // fall through to the RPC handler instead of being swallowed.
+          handshakeCompleteRef.current = true;
+          setHandshakeComplete(false); // keep UI aware it's not fully connected
+          console.warn('[OpenClaw] Handshake marked done-after-failure — RPCs will flow through');
         }
         return;
       }
@@ -238,6 +269,7 @@ export function ClawdChatInterface() {
 
       // ── Handle chat broadcast events (delta / final / error / aborted) ──
       if (message.type === 'event' && message.event === 'chat') {
+        console.info('[WS:CHAT-EVENT]', JSON.stringify(message.payload).slice(0, 500));
         const payload = message.payload as
           | {
               runId?: string;
@@ -256,6 +288,7 @@ export function ClawdChatInterface() {
 
         if (state === 'delta') {
           const text = extractTextFromMessage(payload.message);
+          console.info('[WS:DELTA]', { text, rawMessage: JSON.stringify(payload.message).slice(0, 300) });
           if (typeof text !== 'string') return;
 
           setMessages((current) => {
@@ -272,6 +305,7 @@ export function ClawdChatInterface() {
         } else if (state === 'final') {
           // Replace streaming message with final content if present
           const text = extractTextFromMessage(payload.message);
+          console.info('[WS:FINAL]', { text, streamingId: streamingMessageIdRef.current, rawMessage: JSON.stringify(payload.message).slice(0, 300) });
           if (text && streamingMessageIdRef.current) {
             setMessages((current) =>
               current.map((entry) =>
@@ -288,6 +322,7 @@ export function ClawdChatInterface() {
           activeRunIdRef.current = null;
           streamingMessageIdRef.current = null;
         } else if (state === 'error') {
+          console.error('[WS:ERROR]', { errorMessage: payload.errorMessage, payload: JSON.stringify(payload).slice(0, 300) });
           const errText = payload.errorMessage ?? 'An error occurred';
           setMessages((current) => [
             ...current,
@@ -296,6 +331,7 @@ export function ClawdChatInterface() {
           activeRunIdRef.current = null;
           streamingMessageIdRef.current = null;
         } else if (state === 'aborted') {
+          console.warn('[WS:ABORTED]', { runId: activeRunIdRef.current });
           // Keep whatever was streamed so far
           activeRunIdRef.current = null;
           streamingMessageIdRef.current = null;
@@ -306,10 +342,12 @@ export function ClawdChatInterface() {
       // ── Handle agent streaming events ─────────────────────────────
       // Agent events carry cumulative text in { data: { text, delta } }
       if (message.type === 'event' && message.event === 'agent') {
+        console.info('[WS:AGENT-EVENT]', JSON.stringify(message.payload).slice(0, 500));
         const payload = message.payload as Record<string, unknown> | undefined;
         if (!payload) return;
 
         const text = extractTextFromMessage(payload);
+        console.info('[WS:AGENT-TEXT]', { text: text?.slice(0, 200) });
         if (typeof text !== 'string') return;
 
         setMessages((current) => {
@@ -364,6 +402,26 @@ export function ClawdChatInterface() {
     return () => clearInterval(id);
   }, [handshakeComplete, fetchModels]);
 
+  // ── Poll Ollama /api/ps for currently loaded GPU model ─────────
+  const fetchGpuModel = useCallback(() => {
+    fetch('http://localhost:11434/api/ps')
+      .then((res) => res.json())
+      .then((data: { models?: { name: string }[] }) => {
+        const loaded = data.models ?? [];
+        setGpuModel(loaded.length > 0 ? loaded[0].name : null);
+      })
+      .catch(() => {
+        setGpuModel(null);
+      });
+  }, []);
+
+  // Auto-refresh GPU model every 10s
+  useEffect(() => {
+    fetchGpuModel();
+    const id = setInterval(fetchGpuModel, 10_000);
+    return () => clearInterval(id);
+  }, [fetchGpuModel]);
+
   // Clear GPU — unload all loaded models from Ollama
   const handleClearGpu = useCallback(async () => {
     try {
@@ -378,10 +436,11 @@ export function ClawdChatInterface() {
         });
       }
       console.info('[Zuberi] GPU cleared — unloaded', loaded.length, 'models');
+      fetchGpuModel(); // refresh indicator
     } catch (err) {
       console.error('[Zuberi] Failed to clear GPU:', err);
     }
-  }, []);
+  }, [fetchGpuModel]);
 
   // ── Auto-resize textarea: 1 line → max ~6 lines, then scroll ──
   useEffect(() => {
@@ -618,80 +677,89 @@ export function ClawdChatInterface() {
         style={{ flexShrink: 0, paddingBottom: 16, paddingTop: 8 }}
       >
         <div className="mx-auto max-w-3xl">
-          {/* Input container — standalone rounded box, nothing but content inside */}
+          {/* Unified input + toolbar container — single rounded box */}
           <div
             data-rounded
-            className="relative overflow-hidden border bg-[#2b2a28]"
+            className="overflow-hidden border"
             style={{
-              padding: '12px 14px',
               borderColor: isDragOver ? '#f0a020' : '#3a3938',
               transition: 'border-color 150ms',
             }}
           >
-            {/* File chips (above the textarea when files are queued) */}
-            <FileChips files={queuedFiles} onRemove={removeFile} />
+            {/* Row 1 — Input field + send button */}
+            <div className="relative bg-[#2b2a28]" style={{ padding: '12px 14px 8px' }}>
+              {/* File chips (above the textarea when files are queued) */}
+              <FileChips files={queuedFiles} onRemove={removeFile} />
 
-            <textarea
-              ref={textareaRef}
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={handleKeyDown}
-              onPaste={handlePaste}
-              rows={1}
-              placeholder="Reply..."
-              className="w-full resize-none border-none bg-transparent text-sm text-[#e6dbcb] placeholder:text-[#7a7977] outline-none focus:ring-0 focus-visible:ring-0"
-              style={{ minHeight: '22px', maxHeight: '132px', lineHeight: '22px', userSelect: 'text' }}
-            />
-
-            {/* Drag-over overlay */}
-            {isDragOver && (
-              <div
-                className="absolute inset-0 flex items-center justify-center text-sm text-[#f0a020]"
-                style={{ pointerEvents: 'none', zIndex: 10, background: 'rgba(43,42,40,0.92)', borderRadius: 12 }}
-              >
-                Drop files to attach
+              <div className="flex items-end gap-2">
+                <textarea
+                  ref={textareaRef}
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  onPaste={handlePaste}
+                  rows={1}
+                  placeholder="Reply..."
+                  className="flex-1 resize-none border-none bg-transparent text-sm text-[#e6dbcb] placeholder:text-[#7a7977] outline-none focus:ring-0 focus-visible:ring-0"
+                  style={{ minHeight: '22px', maxHeight: '132px', lineHeight: '22px', userSelect: 'text' }}
+                />
+                {/* Send button — coral circle, inside input row */}
+                <button
+                  type="submit"
+                  disabled={!draft.trim() && queuedFiles.length === 0}
+                  aria-label="Send"
+                  className="btn-circle mb-px flex h-7 w-7 shrink-0 items-center justify-center transition-colors disabled:opacity-30"
+                  style={{
+                    backgroundColor: (!draft.trim() && queuedFiles.length === 0) ? '#4a4947' : '#D9654B',
+                  }}
+                >
+                  <ArrowUp size={14} color="#ffffff" />
+                </button>
               </div>
-            )}
-          </div>
 
-          {/* Toolbar row — separate from input, Claude Code style */}
-          <div className="mt-2 flex items-center gap-2 px-0.5">
-            <AttachButton onFiles={processFiles} />
-            <ModeSelector send={send} sessionKey={SESSION_KEY} />
-            <div className="ml-auto flex items-center gap-2">
-              <ModelSelector
-                send={send}
-                isConnected={handshakeComplete}
-                sessionKey={SESSION_KEY}
-                models={models}
-                onClearGpu={handleClearGpu}
-                onOpen={fetchModels}
-              />
-              {/* Send button — coral, Claude Code style */}
-              <button
-                type="submit"
-                disabled={!draft.trim() && queuedFiles.length === 0}
-                aria-label="Send"
-                className="btn-circle flex h-7 w-7 items-center justify-center transition-colors disabled:opacity-30"
-                style={{
-                  backgroundColor: (!draft.trim() && queuedFiles.length === 0) ? '#4a4947' : '#D9654B',
-                }}
-              >
-                <ArrowUp size={14} color="#ffffff" />
-              </button>
+              {/* Drag-over overlay */}
+              {isDragOver && (
+                <div
+                  className="absolute inset-0 flex items-center justify-center text-sm text-[#f0a020]"
+                  style={{ pointerEvents: 'none', zIndex: 10, background: 'rgba(43,42,40,0.92)' }}
+                >
+                  Drop files to attach
+                </div>
+              )}
+            </div>
+
+            {/* Row 2 — Controls toolbar, visually connected */}
+            <div
+              className="flex items-center gap-2 bg-[#2b2a28] px-3 py-1.5"
+              style={{ borderTop: '1px solid #3a3938' }}
+            >
+              <AttachButton onFiles={processFiles} />
+              <ModeSelector send={send} sessionKey={SESSION_KEY} />
+              <div className="ml-auto">
+                <ModelSelector
+                  send={send}
+                  isConnected={handshakeComplete}
+                  sessionKey={SESSION_KEY}
+                  models={models}
+                  onClearGpu={handleClearGpu}
+                  onOpen={fetchModels}
+                />
+              </div>
             </div>
           </div>
 
-          {/* Status bar — working directory + connectivity */}
+          {/* Status bar — working directory + GPU model */}
           <div className="mt-1 flex items-center justify-between px-1" style={{ fontSize: 10, color: '#666564' }}>
             <div className="flex items-center gap-1">
               <Monitor size={10} className="shrink-0 text-[#666564]" />
               <span className="truncate" style={{ maxWidth: 300 }}>C:\</span>
             </div>
-            <Cloud
-              size={12}
-              className={connStatus === 'connected' ? 'text-[#4ade80]' : 'text-[#666564]'}
-            />
+            <div className="flex items-center gap-1">
+              <Cpu size={10} className={gpuModel ? 'text-[#4ade80]' : 'text-[#666564]'} />
+              <span style={{ color: gpuModel ? '#4ade80' : '#666564' }}>
+                {gpuModel ?? 'no model'}
+              </span>
+            </div>
           </div>
         </div>
       </form>
