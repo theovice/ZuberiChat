@@ -33,6 +33,9 @@ export function ModeSelector({ send, sessionKey }: ModeSelectorProps) {
     return localStorage.getItem(STORAGE_KEY) || 'off';
   });
   const [menuOpen, setMenuOpen] = useState(false);
+  // Position for the fixed-position menu overlay
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+  const btnRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   const handleModeChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
@@ -52,13 +55,29 @@ export function ModeSelector({ send, sessionKey }: ModeSelectorProps) {
   };
 
   const closeMenu = useCallback(() => setMenuOpen(false), []);
-  const toggleMenu = useCallback(() => setMenuOpen((prev) => !prev), []);
+
+  const toggleMenu = useCallback(() => {
+    setMenuOpen((prev) => {
+      if (!prev && btnRef.current) {
+        // Calculate position: menu opens upward from the gear icon
+        const rect = btnRef.current.getBoundingClientRect();
+        setMenuPos({ top: rect.top, left: rect.left });
+      }
+      return !prev;
+    });
+  }, []);
 
   // Close on click outside or Escape
   useEffect(() => {
     if (!menuOpen) return;
     const onDown = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) closeMenu();
+      const target = e.target as Node;
+      if (
+        menuRef.current && !menuRef.current.contains(target) &&
+        btnRef.current && !btnRef.current.contains(target)
+      ) {
+        closeMenu();
+      }
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') closeMenu();
@@ -117,9 +136,10 @@ export function ModeSelector({ send, sessionKey }: ModeSelectorProps) {
   ];
 
   return (
-    <div className="flex items-center gap-1" ref={menuRef} style={{ position: 'relative' }}>
+    <div className="flex items-center gap-1">
       {/* Gear icon — clickable, opens menu */}
       <button
+        ref={btnRef}
         type="button"
         onClick={toggleMenu}
         className="flex shrink-0 items-center justify-center transition-colors"
@@ -136,16 +156,17 @@ export function ModeSelector({ send, sessionKey }: ModeSelectorProps) {
         <Settings size={13} />
       </button>
 
-      {/* Gear dropdown menu */}
+      {/* Gear dropdown menu — fixed overlay so it escapes overflow:hidden parents */}
       {menuOpen && (
         <div
+          ref={menuRef}
           className="ctx-menu"
           style={{
-            position: 'absolute',
-            bottom: '100%',
-            left: 0,
-            marginBottom: 6,
-            zIndex: 9999,
+            position: 'fixed',
+            top: menuPos.top,
+            left: menuPos.left,
+            transform: 'translateY(-100%) translateY(-6px)',
+            zIndex: 10001,
           }}
         >
           {gearItems.map((item, idx) =>

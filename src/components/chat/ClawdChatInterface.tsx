@@ -743,6 +743,7 @@ export function ClawdChatInterface() {
                   models={models}
                   onClearGpu={handleClearGpu}
                   onOpen={fetchModels}
+                  onModelLoaded={fetchGpuModel}
                 />
               </div>
             </div>

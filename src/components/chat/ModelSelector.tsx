@@ -21,9 +21,12 @@ type ModelSelectorProps = {
   onClearGpu?: () => void;
   /** Called when dropdown is opened — triggers model list refresh. */
   onOpen?: () => void;
+  /** Called after preload request fires — refreshes GPU model indicator. */
+  onModelLoaded?: () => void;
 };
 
-export function ModelSelector({ send, isConnected, sessionKey, models, onClearGpu, onOpen }: ModelSelectorProps) {
+export function ModelSelector({ send, isConnected, sessionKey, models, onClearGpu, onOpen, onModelLoaded }: ModelSelectorProps) {
+  const [isLoading, setIsLoading] = useState(false);
   const [selectedModel, setSelectedModel] = useState<string>(() => {
     return localStorage.getItem(STORAGE_KEY) || '';
   });
@@ -62,30 +65,58 @@ export function ModelSelector({ send, isConnected, sessionKey, models, onClearGp
         model: value,
       },
     });
+
+    // Preload the selected model into GPU VRAM via Ollama
+    setIsLoading(true);
+    fetch('http://localhost:11434/api/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: value, prompt: '', stream: false, keep_alive: '5m' }),
+    })
+      .then(() => {
+        console.info('[Zuberi] Model preloaded into GPU:', value);
+        onModelLoaded?.();
+      })
+      .catch((err) => {
+        console.error('[Zuberi] Model preload failed:', err);
+      })
+      .finally(() => setIsLoading(false));
   };
 
-  const loading = isConnected && models.length === 0;
+  const listLoading = isConnected && models.length === 0;
 
   return (
-    <select
-      value={selectedModel}
-      onChange={handleModelChange}
-      onFocus={onOpen}
-      disabled={loading || models.length === 0}
-      className="h-7 w-[140px] border border-[#4a4947] bg-[#2b2a28] px-2 text-xs text-[#b0afae] outline-none focus:ring-0 disabled:opacity-50"
-    >
-      {loading && <option value="">Loading...</option>}
-      {!loading && models.length === 0 && <option value="">No models</option>}
-      {models.map((m) => (
-        <option key={m.id} value={m.id}>
-          {m.name}
-        </option>
-      ))}
-      {models.length > 0 && (
-        <option value={CLEAR_GPU_VALUE}>
-          ⏏ Clear GPU
-        </option>
+    <div className="relative flex items-center">
+      <select
+        value={selectedModel}
+        onChange={handleModelChange}
+        onFocus={onOpen}
+        disabled={listLoading || models.length === 0 || isLoading}
+        className="h-7 w-[140px] border border-[#4a4947] bg-[#2b2a28] px-2 text-xs text-[#b0afae] outline-none focus:ring-0 disabled:opacity-50"
+        style={isLoading ? { borderColor: '#f0a020' } : undefined}
+      >
+        {listLoading && <option value="">Loading...</option>}
+        {!listLoading && models.length === 0 && <option value="">No models</option>}
+        {models.map((m) => (
+          <option key={m.id} value={m.id}>
+            {m.name}
+          </option>
+        ))}
+        {models.length > 0 && (
+          <option value={CLEAR_GPU_VALUE}>
+            ⏏ Clear GPU
+          </option>
+        )}
+      </select>
+      {isLoading && (
+        <span
+          className="absolute right-1 text-[10px]"
+          style={{ color: '#f0a020', pointerEvents: 'none' }}
+          title="Loading model into GPU…"
+        >
+          ⟳
+        </span>
       )}
-    </select>
+    </div>
   );
 }
