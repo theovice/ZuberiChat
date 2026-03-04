@@ -269,7 +269,7 @@ export function ClawdChatInterface() {
 
       // ── Handle chat broadcast events (delta / final / error / aborted) ──
       if (message.type === 'event' && message.event === 'chat') {
-        console.info('[WS:CHAT-EVENT]', JSON.stringify(message.payload).slice(0, 500));
+        console.info('[WS:CHAT-EVENT]', JSON.stringify(message.payload ?? null).slice(0, 500));
         const payload = message.payload as
           | {
               runId?: string;
@@ -288,28 +288,37 @@ export function ClawdChatInterface() {
 
         if (state === 'delta') {
           const text = extractTextFromMessage(payload.message);
-          console.info('[WS:DELTA]', { text, rawMessage: JSON.stringify(payload.message).slice(0, 300) });
+          console.info('[WS:DELTA]', { text, rawMessage: JSON.stringify(payload.message ?? null).slice(0, 300) });
           if (typeof text !== 'string') return;
 
+          // Assign streaming ID BEFORE the state updater — never mutate refs inside updaters.
+          // React 19 StrictMode double-invokes updaters; ref mutation inside causes the
+          // second invocation to take the wrong branch, dropping the message from state.
+          if (!streamingMessageIdRef.current) {
+            streamingMessageIdRef.current = crypto.randomUUID();
+          }
+          const streamId = streamingMessageIdRef.current;
+
           setMessages((current) => {
-            if (!streamingMessageIdRef.current) {
-              const id = crypto.randomUUID();
-              streamingMessageIdRef.current = id;
-              return [...current, { id, role: 'assistant', content: text }];
+            const exists = current.some((entry) => entry.id === streamId);
+            if (!exists) {
+              return [...current, { id: streamId, role: 'assistant' as const, content: text }];
             }
             // OpenClaw sends cumulative text in deltas — replace, don't append
             return current.map((entry) =>
-              entry.id === streamingMessageIdRef.current ? { ...entry, content: text } : entry,
+              entry.id === streamId ? { ...entry, content: text } : entry,
             );
           });
         } else if (state === 'final') {
           // Replace streaming message with final content if present
           const text = extractTextFromMessage(payload.message);
-          console.info('[WS:FINAL]', { text, streamingId: streamingMessageIdRef.current, rawMessage: JSON.stringify(payload.message).slice(0, 300) });
+          console.info('[WS:FINAL]', { text, streamingId: streamingMessageIdRef.current, rawMessage: JSON.stringify(payload.message ?? null).slice(0, 300) });
+
           if (text && streamingMessageIdRef.current) {
+            const finalStreamId = streamingMessageIdRef.current;
             setMessages((current) =>
               current.map((entry) =>
-                entry.id === streamingMessageIdRef.current ? { ...entry, content: text } : entry,
+                entry.id === finalStreamId ? { ...entry, content: text } : entry,
               ),
             );
           } else if (text && !streamingMessageIdRef.current) {
@@ -319,8 +328,13 @@ export function ClawdChatInterface() {
               { id: crypto.randomUUID(), role: 'assistant', content: text },
             ]);
           }
-          activeRunIdRef.current = null;
-          streamingMessageIdRef.current = null;
+
+          // Only clear refs for real finals (has text or matches our active run).
+          // Heartbeat finals (no text, no matching runId) must not kill mid-stream state.
+          if (text || !payload.runId || payload.runId === activeRunIdRef.current) {
+            activeRunIdRef.current = null;
+            streamingMessageIdRef.current = null;
+          }
         } else if (state === 'error') {
           console.error('[WS:ERROR]', { errorMessage: payload.errorMessage, payload: JSON.stringify(payload).slice(0, 300) });
           const errText = payload.errorMessage ?? 'An error occurred';
@@ -342,7 +356,7 @@ export function ClawdChatInterface() {
       // ── Handle agent streaming events ─────────────────────────────
       // Agent events carry cumulative text in { data: { text, delta } }
       if (message.type === 'event' && message.event === 'agent') {
-        console.info('[WS:AGENT-EVENT]', JSON.stringify(message.payload).slice(0, 500));
+        console.info('[WS:AGENT-EVENT]', JSON.stringify(message.payload ?? null).slice(0, 500));
         const payload = message.payload as Record<string, unknown> | undefined;
         if (!payload) return;
 
@@ -350,14 +364,19 @@ export function ClawdChatInterface() {
         console.info('[WS:AGENT-TEXT]', { text: text?.slice(0, 200) });
         if (typeof text !== 'string') return;
 
+        // Same pattern as delta handler — ref mutation must be outside the updater.
+        if (!streamingMessageIdRef.current) {
+          streamingMessageIdRef.current = crypto.randomUUID();
+        }
+        const agentStreamId = streamingMessageIdRef.current;
+
         setMessages((current) => {
-          if (!streamingMessageIdRef.current) {
-            const id = crypto.randomUUID();
-            streamingMessageIdRef.current = id;
-            return [...current, { id, role: 'assistant', content: text }];
+          const exists = current.some((entry) => entry.id === agentStreamId);
+          if (!exists) {
+            return [...current, { id: agentStreamId, role: 'assistant' as const, content: text }];
           }
           return current.map((entry) =>
-            entry.id === streamingMessageIdRef.current ? { ...entry, content: text } : entry,
+            entry.id === agentStreamId ? { ...entry, content: text } : entry,
           );
         });
         return;
