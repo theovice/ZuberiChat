@@ -3,6 +3,7 @@ import { Settings } from 'lucide-react';
 import { emit } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { exit } from '@tauri-apps/plugin-process';
 import type { WebSocketMessage } from '@/hooks/useWebSocket';
 
 type ModeOption = {
@@ -91,11 +92,58 @@ export function ModeSelector({ send, sessionKey }: ModeSelectorProps) {
   }, [menuOpen, closeMenu]);
 
   const gearItems: GearMenuItem[] = [
+    // ── File ──
     {
       type: 'item',
       label: 'New Conversation',
       shortcut: 'Ctrl+N',
       action: () => { emit('new-conversation'); closeMenu(); },
+    },
+    {
+      type: 'item',
+      label: 'Settings',
+      shortcut: 'Ctrl+,',
+      action: () => { console.info('[Zuberi] Settings not yet implemented'); closeMenu(); },
+    },
+    { type: 'separator' },
+    // ── Edit ──
+    { type: 'item', label: 'Undo', shortcut: 'Ctrl+Z', action: () => { document.execCommand('undo'); closeMenu(); } },
+    { type: 'item', label: 'Redo', shortcut: 'Ctrl+Y', action: () => { document.execCommand('redo'); closeMenu(); } },
+    { type: 'separator' },
+    { type: 'item', label: 'Cut', shortcut: 'Ctrl+X', action: () => { document.execCommand('cut'); closeMenu(); } },
+    { type: 'item', label: 'Copy', shortcut: 'Ctrl+C', action: () => { document.execCommand('copy'); closeMenu(); } },
+    {
+      type: 'item',
+      label: 'Paste',
+      shortcut: 'Ctrl+V',
+      action: () => {
+        navigator.clipboard
+          .readText()
+          .then((text) => document.execCommand('insertText', false, text))
+          .catch(() => document.execCommand('paste'));
+        closeMenu();
+      },
+    },
+    { type: 'item', label: 'Select All', shortcut: 'Ctrl+A', action: () => { document.execCommand('selectAll'); closeMenu(); } },
+    { type: 'separator' },
+    // ── View ──
+    {
+      type: 'item',
+      label: 'Zoom In',
+      shortcut: 'Ctrl+=',
+      action: () => { emit('zoom', 'in'); closeMenu(); },
+    },
+    {
+      type: 'item',
+      label: 'Zoom Out',
+      shortcut: 'Ctrl+-',
+      action: () => { emit('zoom', 'out'); closeMenu(); },
+    },
+    {
+      type: 'item',
+      label: 'Reset Zoom',
+      shortcut: 'Ctrl+0',
+      action: () => { emit('zoom', 'reset'); closeMenu(); },
     },
     { type: 'separator' },
     {
@@ -120,6 +168,7 @@ export function ModeSelector({ send, sessionKey }: ModeSelectorProps) {
       },
     },
     { type: 'separator' },
+    // ── Links & Info ──
     {
       type: 'item',
       label: 'Kanban Board',
@@ -130,8 +179,29 @@ export function ModeSelector({ send, sessionKey }: ModeSelectorProps) {
     },
     {
       type: 'item',
+      label: 'Documentation',
+      action: () => {
+        invoke('open_url_in_browser', { url: 'https://docs.openclaw.ai' }).catch(console.error);
+        closeMenu();
+      },
+    },
+    {
+      type: 'item',
       label: 'About Zuberi',
       action: () => { window.alert('Zuberi v0.1.0\nControl interface for OpenClaw'); closeMenu(); },
+    },
+    { type: 'separator' },
+    // ── Window ──
+    {
+      type: 'item',
+      label: 'Close',
+      shortcut: 'Ctrl+W',
+      action: () => getCurrentWindow().close(),
+    },
+    {
+      type: 'item',
+      label: 'Exit',
+      action: () => exit(0),
     },
   ];
 
@@ -167,6 +237,8 @@ export function ModeSelector({ send, sessionKey }: ModeSelectorProps) {
             left: menuPos.left,
             transform: 'translateY(-100%) translateY(-6px)',
             zIndex: 10001,
+            maxHeight: 'calc(100vh - 60px)',
+            overflowY: 'auto',
           }}
         >
           {gearItems.map((item, idx) =>
