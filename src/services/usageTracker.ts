@@ -1,5 +1,4 @@
-// Usage tracker API client
-// TODO: Wire to real backend at http://100.100.101.1:3002 when deployed
+// Usage tracker API client — live backend on CEG:3002
 
 export interface UsageStats {
   total_events: number;
@@ -17,8 +16,7 @@ export interface UsageLimits {
   percent_used: number;
 }
 
-// Mock data — replace with real API calls later
-const MOCK_MODE = true;
+const MOCK_MODE = false;
 const USAGE_API = 'http://100.100.101.1:3002';
 
 export async function getStats5h(): Promise<UsageStats> {
