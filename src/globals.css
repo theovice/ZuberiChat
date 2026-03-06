@@ -126,6 +126,10 @@ input, textarea, [contenteditable="true"] {
 /* ── App Toolbar (kanban toggle, update indicator) ─────── */
 
 .titlebar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
   height: 36px;
   display: flex;
   align-items: center;
@@ -135,6 +139,7 @@ input, textarea, [contenteditable="true"] {
   user-select: none;
   -webkit-user-select: none;
   font-family: system-ui, -apple-system, sans-serif;
+  z-index: 9999;
 }
 
 .titlebar-controls {
@@ -493,6 +498,82 @@ input, textarea, [contenteditable="true"] {
   color: var(--text-muted);
   padding-top: 8px;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* ── Sidebar ────────────────────────────────────────────── */
+.sidebar {
+  flex-shrink: 0;
+  height: 100%;
+  background: var(--surface-0);
+  border-right: 1px solid var(--border-subtle);
+  overflow: hidden;
+  transition: width var(--transition-med);
+}
+
+.sidebar-inner {
+  width: 260px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 12px 8px;
+  overflow-y: auto;
+}
+
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.sidebar-item:hover {
+  background: var(--surface-glass-1);
+  color: var(--text-primary);
+}
+
+.sidebar-item--primary {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.sidebar-item--disabled {
+  opacity: 0.35;
+  cursor: default;
+  pointer-events: none;
+}
+
+.sidebar-separator {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 6px 12px;
+}
+
+.sidebar-section {
+  padding: 10px 12px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.sidebar-empty {
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.sidebar-toggle {
+  flex-shrink: 0;
 }
 
 /* ── Rounded corners opt-in ──────────────────────────────── */

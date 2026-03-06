@@ -143,11 +143,13 @@ describe('ModelSelector', () => {
         models={[]}
       />,
     );
-    const select = screen.getByRole('combobox');
-    expect(select).toBeInTheDocument();
+    // Custom dropdown uses a button trigger instead of a combobox
+    const btn = screen.getByRole('button');
+    expect(btn).toBeInTheDocument();
+    expect(btn).toBeDisabled();
   });
 
-  it('renders with mock models', async () => {
+  it('renders with mock models and shows selected model', async () => {
     const { ModelSelector } = await import('@/components/chat/ModelSelector');
     const models = [
       { id: 'qwen3:14b-fast', name: 'qwen3:14b-fast', parameterSize: '14.8B' },
@@ -161,12 +163,13 @@ describe('ModelSelector', () => {
         models={models}
       />,
     );
+    // Button shows selected model name (first model auto-selected)
     expect(screen.getByText(/qwen3:14b-fast/)).toBeInTheDocument();
-    expect(screen.getByText('qwen3:14b')).toBeInTheDocument();
   });
 
-  it('shows Clear GPU option when models are loaded', async () => {
+  it('shows dropdown items including Clear GPU when opened', async () => {
     const { ModelSelector } = await import('@/components/chat/ModelSelector');
+    const { fireEvent } = await import('@testing-library/react');
     const models = [{ id: 'model-a', name: 'model-a' }];
     render(
       <ModelSelector
@@ -177,6 +180,9 @@ describe('ModelSelector', () => {
         onClearGpu={noop}
       />,
     );
+    // Open the dropdown by clicking the button
+    const btn = screen.getByRole('button');
+    fireEvent.click(btn);
     expect(screen.getByText(/Clear GPU/)).toBeInTheDocument();
   });
 });

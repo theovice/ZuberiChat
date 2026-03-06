@@ -92,20 +92,6 @@ export function ModeSelector({ send, sessionKey }: ModeSelectorProps) {
   }, [menuOpen, closeMenu]);
 
   const gearItems: GearMenuItem[] = [
-    // ── File ──
-    {
-      type: 'item',
-      label: 'New Conversation',
-      shortcut: 'Ctrl+N',
-      action: () => { emit('new-conversation'); closeMenu(); },
-    },
-    {
-      type: 'item',
-      label: 'Settings',
-      shortcut: 'Ctrl+,',
-      action: () => { console.info('[Zuberi] Settings not yet implemented'); closeMenu(); },
-    },
-    { type: 'separator' },
     // ── Edit ──
     { type: 'item', label: 'Undo', shortcut: 'Ctrl+Z', action: () => { document.execCommand('undo'); closeMenu(); } },
     { type: 'item', label: 'Redo', shortcut: 'Ctrl+Y', action: () => { document.execCommand('redo'); closeMenu(); } },
@@ -166,29 +152,6 @@ export function ModeSelector({ send, sessionKey }: ModeSelectorProps) {
         }
         closeMenu();
       },
-    },
-    { type: 'separator' },
-    // ── Links & Info ──
-    {
-      type: 'item',
-      label: 'Kanban Board',
-      action: () => {
-        invoke('open_url_in_browser', { url: 'http://100.100.101.1:3001' }).catch(console.error);
-        closeMenu();
-      },
-    },
-    {
-      type: 'item',
-      label: 'Documentation',
-      action: () => {
-        invoke('open_url_in_browser', { url: 'https://docs.openclaw.ai' }).catch(console.error);
-        closeMenu();
-      },
-    },
-    {
-      type: 'item',
-      label: 'About Zuberi',
-      action: () => { window.alert('Zuberi v0.1.0\nControl interface for OpenClaw'); closeMenu(); },
     },
     { type: 'separator' },
     // ── Window ──

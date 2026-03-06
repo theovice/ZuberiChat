@@ -2,7 +2,7 @@ import { useCallback, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { emit } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { Minus, Square, X } from 'lucide-react';
+import { Minus, PanelLeft, Square, X } from 'lucide-react';
 import { UsageMeter } from '../chat/UsageMeter';
 
 // ---------------------------------------------------------------------------
@@ -11,9 +11,11 @@ import { UsageMeter } from '../chat/UsageMeter';
 interface TitlebarProps {
   updateAvailable?: boolean;
   onUpdateClick?: () => void;
+  sidebarOpen?: boolean;
+  onToggleSidebar?: () => void;
 }
 
-export function Titlebar({ updateAvailable = false, onUpdateClick }: TitlebarProps) {
+export function Titlebar({ updateAvailable = false, onUpdateClick, sidebarOpen = false, onToggleSidebar }: TitlebarProps) {
   // ── Global keyboard shortcuts ─────────────────────────────────
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -23,7 +25,7 @@ export function Titlebar({ updateAvailable = false, onUpdateClick }: TitlebarPro
         emit('new-conversation');
       } else if (ctrl && e.key === ',') {
         e.preventDefault();
-        emit('open-settings');
+        emit('toggle-sidebar');
       } else if (ctrl && !e.shiftKey && e.key.toLowerCase() === 'w') {
         e.preventDefault();
         getCurrentWindow().close();
@@ -73,9 +75,18 @@ export function Titlebar({ updateAvailable = false, onUpdateClick }: TitlebarPro
   // ── Render ────────────────────────────────────────────────────
   return (
     <div className="titlebar" data-tauri-drag-region>
-      {/* Left: Zuberi title (static) */}
-      <div className="titlebar-menu-anchor">
-        <span className="titlebar-title" style={{ paddingLeft: 12 }}>Zuberi</span>
+      {/* Left: sidebar toggle + Zuberi title */}
+      <div className="titlebar-menu-anchor" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        <button
+          className="titlebar-button sidebar-toggle"
+          onClick={onToggleSidebar}
+          aria-label="Toggle sidebar"
+          title="Toggle sidebar (Ctrl+,)"
+          style={{ opacity: sidebarOpen ? 1 : 0.5 }}
+        >
+          <PanelLeft size={14} />
+        </button>
+        <span className="titlebar-title">Zuberi</span>
       </div>
 
       {/* Center spacer — drag region */}
