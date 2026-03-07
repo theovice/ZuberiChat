@@ -115,7 +115,7 @@ About Zuberi text: `Zuberi v0.1.1\nWahwearro Holdings LLC`
 ## Last 5 Commits
 
 ```
-(pending) RTL-034 Part 2: Frontend version polling and update indicators
+31f00a5 RTL-034 Part 2: Frontend version polling and update indicators
 dcbad3d RTL-034 Part 1: Version poller backend + version.json generation
 dc05fdc RTL-043: Sync OpenClaw model catalog with installed Ollama models
 f6d53da RTL-042d: Tune compaction for 32K context + re-enable memory flush
