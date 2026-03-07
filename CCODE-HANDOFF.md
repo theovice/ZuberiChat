@@ -55,6 +55,11 @@ About Zuberi text: `Zuberi v0.1.1\nWahwearro Holdings LLC`
 - `ClawdChatInterface.tsx` calls `ensureEnvironment()` on mount — processes `EnvironmentStatus` result for ollama/model/openclaw
 - `ensureEnvironment()` in `ollama.ts` uses static import of `invoke` — do NOT use dynamic `await import()` (breaks production build)
 - NSIS installer: always install the LATEST .exe in `src-tauri\target\release\bundle\nsis\` — old versions may coexist
+- Modelfile think scaffolding: removing the assistant-side prefill block (think tags) from TEMPLATE is the correct fix for "NO" prefix
+- PARAMETER think false is NOT a supported Modelfile param in current Ollama — do not add it
+- If "NO" persists after template fix, inspect OpenClaw request payload for think field overrides — request-level think controls are separate from template
+- Modelfile backup always at `C:\Users\PLUTO\Modelfile.qwen3-14b-fast.bak`
+- `check_custom_model()` checks presence only, not template correctness — known gap
 
 ## Key File Locations
 
@@ -79,11 +84,11 @@ About Zuberi text: `Zuberi v0.1.1\nWahwearro Holdings LLC`
 ## Last 5 Commits
 
 ```
-9d8abdd RTL-040: Self-healing startup — conditional model check + OpenClaw health
+e2b4b39 RTL-041: Fix NO prefix — remove think scaffolding from Modelfile template
+2427039 RTL-040: Self-healing startup — conditional model check + OpenClaw health
 5f15e39 RTL-039b: Silent Ollama launch, tokio sleep, health-check verification
 330079f RTL-039: Ollama health check and auto-launch on startup
 8fbecfc RTL-038: Fix Ollama CORS panic and OpenClaw gateway origin rejection
-f06ef97 RTL-037: Post-fix production build installed
 ```
 
 ## Do Not Touch
@@ -105,14 +110,14 @@ f06ef97 RTL-037: Post-fix production build installed
 
 ## Last Task Completed
 
-RTL-040: Self-healing startup — conditional model check + OpenClaw health.
-- Added `check_custom_model()`: queries `/api/tags` for `qwen3:14b-fast`, rebuilds from Modelfile if missing
-- Added `check_openclaw()`: health checks OpenClaw on port 18789 (200 or 401 = healthy)
-- Added `ensure_environment()` orchestrator: Ollama (blocking) → model check → OpenClaw health
-- Updated `ClawdChatInterface.tsx`: mount effect calls `ensureEnvironment()` instead of `ensureOllama()`
-- Fixed `ensureEnvironment()` in `ollama.ts`: switched from dynamic `await import()` to static import (dynamic broke production)
-- Functional test: killed Ollama, launched Zuberi, Ollama responded at 5s, 5 models present, qwen3:14b-fast confirmed
-- 13/13 smoke tests, build verified (5/5), NSIS installed
+RTL-041: Fix NO prefix — remove think scaffolding from Modelfile template.
+- Removed forced `<think>\n\n</think>` prefill from `C:\Users\PLUTO\Modelfile.qwen3-14b-fast` TEMPLATE
+- Assistant prefill block retained (`<|im_start|>assistant` + `{{ end }}`) without think tags
+- Rebuilt `qwen3:14b-fast` model via `ollama create` — success
+- `ollama show` confirms no think tags in rebuilt model template
+- Ollama API test: response does NOT start with "NO" — content is clean after native think block
+- qwen3 still generates `<think>` natively (model behavior, not template-forced) — expected
+- OpenClaw restarted, health check 200
 
 ## Next Task
 
