@@ -24,3 +24,18 @@ export async function launchOllama(): Promise<boolean> {
     return false;
   }
 }
+
+export interface EnvironmentStatus {
+  ollama: string;
+  model: string;
+  openclaw: string;
+}
+
+export async function ensureEnvironment(): Promise<EnvironmentStatus> {
+  try {
+    return await invoke<EnvironmentStatus>('ensure_environment');
+  } catch (err) {
+    console.error('[Ollama] ensureEnvironment failed', err);
+    return { ollama: 'failed', model: 'pending', openclaw: 'pending' };
+  }
+}

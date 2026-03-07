@@ -48,8 +48,13 @@ About Zuberi text: `Zuberi v0.1.1\nWahwearro Holdings LLC`
 - Success verified by HTTP health check on `/api/tags` only, not tray icon presence
 - Failure path: `%LOCALAPPDATA%\Ollama\server.log` and app.log
 - Frontend `src/lib/ollama.ts` wraps Tauri IPC calls with try/catch (graceful fail in vitest)
-- `ClawdChatInterface.tsx` calls `ensureOllama()` on mount before `fetchModels()`, sets `ollamaDown` state
 - `ModelSelector.tsx` shows "Ollama is not running" + Start/Retry UI when `ollamaDown && models.length === 0`
+- `ensure_environment()` orchestrator: Ollama (blocking) → `check_custom_model()` → `check_openclaw()`, returns JSON `{ollama, model, openclaw}`
+- `check_custom_model()` queries `/api/tags` for `"qwen3:14b-fast"`, rebuilds from `C:\Users\PLUTO\Modelfile.qwen3-14b-fast` if missing
+- `check_openclaw()` health checks `http://127.0.0.1:18789` — accepts 200 or 401 as healthy
+- `ClawdChatInterface.tsx` calls `ensureEnvironment()` on mount — processes `EnvironmentStatus` result for ollama/model/openclaw
+- `ensureEnvironment()` in `ollama.ts` uses static import of `invoke` — do NOT use dynamic `await import()` (breaks production build)
+- NSIS installer: always install the LATEST .exe in `src-tauri\target\release\bundle\nsis\` — old versions may coexist
 
 ## Key File Locations
 
@@ -58,8 +63,8 @@ About Zuberi text: `Zuberi v0.1.1\nWahwearro Holdings LLC`
 | `src-tauri/tauri.conf.json` | App version, CSP, window config, bundle config |
 | `src-tauri/Cargo.toml` | Rust deps: tauri 2, serde, single-instance, process, opener, reqwest, tokio |
 | `src-tauri/capabilities/default.json` | Tauri v2 permissions (core, window, process, opener) |
-| `src-tauri/src/main.rs` | Tauri commands: read_gateway_token, open_url_in_browser, toggle_devtools, save_upload, sync_to_ceg, check_ollama_live, launch_ollama, ensure_ollama |
-| `src/lib/ollama.ts` | Frontend wrappers for Ollama Tauri IPC (ensureOllama, launchOllama) |
+| `src-tauri/src/main.rs` | Tauri commands: read_gateway_token, open_url_in_browser, toggle_devtools, save_upload, sync_to_ceg, check_ollama_live, launch_ollama, ensure_ollama, check_custom_model, check_openclaw, ensure_environment |
+| `src/lib/ollama.ts` | Frontend wrappers for Tauri IPC (ensureOllama, launchOllama, ensureEnvironment) |
 | `src/components/layout/Sidebar.tsx` | 3 items: New chat, Settings, Kanban Board |
 | `src/components/layout/Titlebar.tsx` | Window controls, sidebar toggle, UsageMeter, keyboard shortcuts |
 | `src/components/layout/ZuberiContextMenu.tsx` | Right-click menu: File, Kanban, Edit, View, Help (About Zuberi) |
@@ -74,11 +79,11 @@ About Zuberi text: `Zuberi v0.1.1\nWahwearro Holdings LLC`
 ## Last 5 Commits
 
 ```
-d1809d7 RTL-039b: Silent Ollama launch, tokio sleep, health-check verification
+9d8abdd RTL-040: Self-healing startup — conditional model check + OpenClaw health
+5f15e39 RTL-039b: Silent Ollama launch, tokio sleep, health-check verification
 330079f RTL-039: Ollama health check and auto-launch on startup
 8fbecfc RTL-038: Fix Ollama CORS panic and OpenClaw gateway origin rejection
 f06ef97 RTL-037: Post-fix production build installed
-a7c775c RTL-037: Fix OLLAMA_ORIGINS for dev+prod, fix gateway token path resolution
 ```
 
 ## Do Not Touch
@@ -100,12 +105,13 @@ a7c775c RTL-037: Fix OLLAMA_ORIGINS for dev+prod, fix gateway token path resolut
 
 ## Last Task Completed
 
-RTL-039b: Silent Ollama launch, tokio sleep, health-check verification.
-- `launch_ollama()` now uses full path to ollama.exe and `CREATE_NO_WINDOW` flag — no terminal window
-- `launch_ollama()` changed from sync `fn` to `async fn`
-- `ensure_ollama()` polls 15×1000ms (was 10×700ms) using `tokio::time::sleep`
-- `ModelSelector.tsx` error state now shows log path: `%LOCALAPPDATA%\Ollama\server.log`
-- Functional test: killed Ollama, launched Zuberi, health check passed on poll 1 (HTTP 200, 5 models)
+RTL-040: Self-healing startup — conditional model check + OpenClaw health.
+- Added `check_custom_model()`: queries `/api/tags` for `qwen3:14b-fast`, rebuilds from Modelfile if missing
+- Added `check_openclaw()`: health checks OpenClaw on port 18789 (200 or 401 = healthy)
+- Added `ensure_environment()` orchestrator: Ollama (blocking) → model check → OpenClaw health
+- Updated `ClawdChatInterface.tsx`: mount effect calls `ensureEnvironment()` instead of `ensureOllama()`
+- Fixed `ensureEnvironment()` in `ollama.ts`: switched from dynamic `await import()` to static import (dynamic broke production)
+- Functional test: killed Ollama, launched Zuberi, Ollama responded at 5s, 5 models present, qwen3:14b-fast confirmed
 - 13/13 smoke tests, build verified (5/5), NSIS installed
 
 ## Next Task

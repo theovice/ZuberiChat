@@ -9,7 +9,7 @@ import { ModeSelector } from '@/components/chat/ModeSelector';
 // GpuStatus removed from toolbar — component kept for future use
 import { ZuberiContextMenu } from '@/components/layout/ZuberiContextMenu';
 import { AttachButton, FileChips, type QueuedFile } from '@/components/chat/FileAttachments';
-import { ensureOllama, launchOllama } from '@/lib/ollama';
+import { ensureEnvironment } from '@/lib/ollama';
 
 type ChatRole = 'user' | 'assistant';
 
@@ -416,20 +416,36 @@ export function ClawdChatInterface() {
       });
   }, []);
 
-  // Ensure Ollama is running on mount, then fetch models
+  // Ensure environment on mount: Ollama → model check → OpenClaw health
   useEffect(() => {
     let cancelled = false;
-    ensureOllama().then((ok) => {
-      if (cancelled) return;
-      if (ok) {
-        console.info('[Zuberi] Ollama is live');
+    ensureEnvironment()
+      .then((result) => {
+        if (cancelled) return;
+        if (result.ollama === 'failed' || result.ollama.startsWith('error')) {
+          console.warn('[Zuberi] Ollama is not running:', result.ollama);
+          setOllamaDown(true);
+          return;
+        }
         setOllamaDown(false);
+        console.info('[Zuberi] Ollama is live');
         fetchModels();
-      } else {
-        console.warn('[Zuberi] Ollama is not running');
+        if (result.model.startsWith('error')) {
+          console.warn('[Zuberi] Model check failed:', result.model);
+        } else {
+          console.info('[Zuberi] Model check:', result.model);
+        }
+        if (result.openclaw === 'openclaw_unhealthy') {
+          console.warn('[Zuberi] OpenClaw unhealthy on startup');
+        } else {
+          console.info('[Zuberi] OpenClaw:', result.openclaw);
+        }
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.error('[Zuberi] ensureEnvironment failed:', err);
         setOllamaDown(true);
-      }
-    });
+      });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -485,13 +501,18 @@ export function ClawdChatInterface() {
   // ── Retry Ollama handler (for ModelSelector recovery UI) ──
   const handleRetryOllama = useCallback(async () => {
     setOllamaDown(false); // optimistic
-    const ok = await launchOllama();
-    if (ok) {
-      console.info('[Zuberi] Ollama launched via retry');
-      setOllamaDown(false);
-      fetchModels();
-    } else {
-      console.warn('[Zuberi] Ollama retry failed');
+    try {
+      const result = await ensureEnvironment();
+      if (result.ollama === 'failed' || result.ollama.startsWith('error')) {
+        console.warn('[Zuberi] Ollama retry failed:', result.ollama);
+        setOllamaDown(true);
+      } else {
+        console.info('[Zuberi] Ollama launched via retry');
+        setOllamaDown(false);
+        fetchModels();
+      }
+    } catch (err) {
+      console.error('[Zuberi] ensureEnvironment retry failed:', err);
       setOllamaDown(true);
     }
   }, [fetchModels]);

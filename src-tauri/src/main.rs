@@ -176,6 +176,102 @@ async fn ensure_ollama() -> Result<bool, String> {
     Ok(false)
 }
 
+#[tauri::command]
+async fn check_custom_model() -> Result<String, String> {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+    // Check if custom model exists in /api/tags
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(3))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let tags_resp = client
+        .get("http://127.0.0.1:11434/api/tags")
+        .send()
+        .await
+        .map_err(|e| format!("Failed to reach Ollama: {e}"))?;
+    let body = tags_resp
+        .text()
+        .await
+        .map_err(|e| format!("Failed to read tags response: {e}"))?;
+    // If model already present, nothing to do
+    if body.contains("\"qwen3:14b-fast\"") {
+        return Ok("model_present".to_string());
+    }
+    // Model missing — rebuild from modelfile
+    let modelfile_path = r"C:\Users\PLUTO\Modelfile.qwen3-14b-fast";
+    if !std::path::Path::new(modelfile_path).exists() {
+        return Err(format!("Modelfile not found at {modelfile_path}"));
+    }
+    let output = std::process::Command::new(
+        r"C:\Users\PLUTO\AppData\Local\Programs\Ollama\ollama.exe"
+    )
+        .args(["create", "qwen3:14b-fast", "-f", modelfile_path])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .map_err(|e| format!("Failed to run ollama create: {e}"))?;
+    if output.status.success() {
+        Ok("model_rebuilt".to_string())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        Err(format!("ollama create failed: {stderr}"))
+    }
+}
+
+#[tauri::command]
+async fn check_openclaw() -> Result<String, String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(3))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let healthy = match client
+        .get("http://127.0.0.1:18789")
+        .send()
+        .await
+    {
+        Ok(r) => r.status().is_success() || r.status().as_u16() == 401,
+        Err(_) => false,
+    };
+    if healthy {
+        Ok("openclaw_ok".to_string())
+    } else {
+        Ok("openclaw_unhealthy".to_string())
+    }
+}
+
+#[tauri::command]
+async fn ensure_environment() -> Result<serde_json::Value, String> {
+    use serde_json::json;
+    let mut results = json!({
+        "ollama": "pending",
+        "model": "pending",
+        "openclaw": "pending"
+    });
+    // Step 1: Ollama — blocking. Cannot proceed without it.
+    match ensure_ollama().await {
+        Ok(true) => results["ollama"] = json!("ok"),
+        Ok(false) => {
+            results["ollama"] = json!("failed");
+            return Ok(results);
+        }
+        Err(e) => {
+            results["ollama"] = json!(format!("error: {e}"));
+            return Ok(results);
+        }
+    }
+    // Step 2: Custom model — non-blocking. Warn if fails, continue.
+    match check_custom_model().await {
+        Ok(msg) => results["model"] = json!(msg),
+        Err(e) => results["model"] = json!(format!("error: {e}")),
+    }
+    // Step 3: OpenClaw — non-blocking. Return status, let frontend handle.
+    match check_openclaw().await {
+        Ok(msg) => results["openclaw"] = json!(msg),
+        Err(e) => results["openclaw"] = json!(format!("error: {e}")),
+    }
+    Ok(results)
+}
+
 /// Read the gateway token from .openclaw.local.json.
 #[tauri::command]
 fn read_gateway_token() -> Result<String, String> {
@@ -206,7 +302,7 @@ fn main() {
         }))
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![read_gateway_token, open_url_in_browser, toggle_devtools, save_upload, sync_to_ceg, check_ollama_live, launch_ollama, ensure_ollama])
+        .invoke_handler(tauri::generate_handler![read_gateway_token, open_url_in_browser, toggle_devtools, save_upload, sync_to_ceg, check_ollama_live, launch_ollama, ensure_ollama, check_custom_model, check_openclaw, ensure_environment])
         .setup(|app| {
             #[cfg(debug_assertions)]
             if let Some(window) = app.get_webview_window("main") {
