@@ -89,7 +89,14 @@ About Zuberi text: `Zuberi v0.1.1\nWahwearro Holdings LLC`
 - Sidebar shows "Update available: vX.Y.Z" in amber (#f0a500) at bottom, only when update available
 - `repo_unavailable` errors stay silent — no UI shown, just console warning
 - Hook disables itself entirely if `get_installed_version` fails (vitest graceful)
-- Phase 1 complete — detect and indicate only, no rebuild/relaunch functionality
+- RTL-034 complete: Phase 1 (detect + indicate) + Phase 2 (one-click update trigger)
+- `run_local_update` Rust command: spawns `scripts/update-local.ps1` via PowerShell with `CREATE_NEW_CONSOLE` (0x00000010), returns immediately
+- `update-local.ps1` pipeline: `pnpm test` → `pnpm tauri build` → `verify-build.ps1` → find newest NSIS installer → launch installer
+- `update-local.ps1` logs all output to `logs/update.log` in repo root
+- NSIS installer search order: `*setup*.exe` → `*Setup*.exe` → any `*.exe` in `src-tauri/target/release/bundle/nsis/`
+- Sidebar "Update available" indicator is a clickable `<button>` — shows `window.confirm()`, calls `invoke('run_local_update')`, shows "Updating..." while running
+- Titlebar amber dot is a clickable `<button>` — same confirm+invoke pattern, dot turns gray (muted) when updating
+- Both update buttons use local `useState(false)` for `updating` state — no global state needed
 
 ## Key File Locations
 
@@ -98,13 +105,14 @@ About Zuberi text: `Zuberi v0.1.1\nWahwearro Holdings LLC`
 | `src-tauri/tauri.conf.json` | App version, CSP, window config, bundle config |
 | `src-tauri/Cargo.toml` | Rust deps: tauri 2, serde, single-instance, process, opener, reqwest, tokio |
 | `src-tauri/capabilities/default.json` | Tauri v2 permissions (core, window, process, opener) |
-| `src-tauri/src/main.rs` | Tauri commands: read_gateway_token, open_url_in_browser, toggle_devtools, save_upload, sync_to_ceg, check_ollama_live, launch_ollama, ensure_ollama, check_custom_model, check_openclaw, ensure_environment, get_installed_version, read_repo_version |
+| `src-tauri/src/main.rs` | Tauri commands: read_gateway_token, open_url_in_browser, toggle_devtools, save_upload, sync_to_ceg, check_ollama_live, launch_ollama, ensure_ollama, check_custom_model, check_openclaw, ensure_environment, get_installed_version, read_repo_version, run_local_update |
 | `src-tauri/build.rs` | Build script: embeds APP_VERSION, BUILD_COMMIT, BUILD_TIMESTAMP at compile time |
 | `scripts/generate-version.ps1` | Pre-build script: generates version.json from tauri.conf.json + git |
+| `scripts/update-local.ps1` | One-click update: test → build → verify → find NSIS installer → launch |
 | `src/lib/ollama.ts` | Frontend wrappers for Tauri IPC (ensureOllama, launchOllama, ensureEnvironment) |
 | `src/hooks/useVersionPoller.ts` | Version polling hook: 60s poll, semver compare, update detection |
-| `src/components/layout/Sidebar.tsx` | 3 items: New chat, Settings, Kanban Board + version indicator |
-| `src/components/layout/Titlebar.tsx` | Window controls, sidebar toggle, UsageMeter, amber dot, keyboard shortcuts |
+| `src/components/layout/Sidebar.tsx` | 3 items: New chat, Settings, Kanban Board + clickable update indicator |
+| `src/components/layout/Titlebar.tsx` | Window controls, sidebar toggle, UsageMeter, clickable amber dot, keyboard shortcuts |
 | `src/components/layout/ZuberiContextMenu.tsx` | Right-click menu: File, Kanban, Edit, View, Help (About Zuberi) |
 | `src/components/chat/ModelSelector.tsx` | Dropdown model picker, fetches from Ollama, preloads to GPU |
 | `src/components/chat/ClawdChatInterface.tsx` | Main chat component, WebSocket to OpenClaw, fetchModels, drag-drop |
@@ -117,11 +125,11 @@ About Zuberi text: `Zuberi v0.1.1\nWahwearro Holdings LLC`
 ## Last 5 Commits
 
 ```
+PENDING RTL-034 Part 3: Local one-click update with PowerShell script
+8c52475 Update CCODE-HANDOFF.md with RTL-034 debug fix commit hash
 c8fb3af RTL-034: Fix read_repo_version parse failure
 31f00a5 RTL-034 Part 2: Frontend version polling and update indicators
 dcbad3d RTL-034 Part 1: Version poller backend + version.json generation
-dc05fdc RTL-043: Sync OpenClaw model catalog with installed Ollama models
-f6d53da RTL-042d: Tune compaction for 32K context + re-enable memory flush
 ```
 
 ## Do Not Touch
@@ -143,13 +151,15 @@ f6d53da RTL-042d: Tune compaction for 32K context + re-enable memory flush
 
 ## Last Task Completed
 
-RTL-034 Debug: Fix read_repo_version parse failure.
-- Root cause: `scripts/generate-version.ps1` used `Set-Content -Encoding UTF8` which writes UTF-8 BOM (EF BB BF) — `serde_json::from_str` choked on the BOM prefix
-- Fix 1: `generate-version.ps1` now uses `[System.IO.File]::WriteAllText()` with `UTF8Encoding($false)` — writes BOM-free JSON
-- Fix 2: `read_repo_version()` in main.rs strips `\u{FEFF}` BOM prefix before parsing — safety net for any future BOM-contaminated files
-- Version poller now works end-to-end: installed version comparison, amber dot, sidebar indicator
+RTL-034 Part 3: Local one-click update runner.
+- New file: `scripts/update-local.ps1` — test → build → verify → find NSIS installer → launch
+- New Rust command: `run_local_update` — spawns update script in new console window, returns immediately
+- Sidebar "Update available: vX.Y.Z" indicator is now a clickable button with `window.confirm()` dialog
+- Titlebar amber dot is now a clickable button — dot turns gray while updating
+- Both buttons call `invoke('run_local_update')` and show "Updating..." state
 - 13/13 smoke tests pass, `pnpm tauri dev` builds and launches cleanly
+- RTL-034 fully complete: Part 1 (backend) + Part 2 (frontend) + Debug (BOM fix) + Part 3 (update runner)
 
 ## Next Task
 
-None queued — RTL-034 complete (both parts + debug fix).
+None queued — RTL-034 complete (all parts).

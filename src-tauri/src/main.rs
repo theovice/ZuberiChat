@@ -306,6 +306,24 @@ fn read_repo_version() -> Result<VersionInfo, String> {
     Ok(info)
 }
 
+/// Spawn the local update script (test → build → install) in a detached process.
+/// Returns immediately — does not wait for completion.
+#[tauri::command]
+fn run_local_update() -> Result<String, String> {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NEW_CONSOLE: u32 = 0x00000010;
+    let script_path = r"C:\Users\PLUTO\github\Repo\ZuberiChat\scripts\update-local.ps1";
+    if !std::path::Path::new(script_path).exists() {
+        return Err(format!("Update script not found at {script_path}"));
+    }
+    std::process::Command::new("powershell")
+        .args(["-ExecutionPolicy", "Bypass", "-File", script_path])
+        .creation_flags(CREATE_NEW_CONSOLE)
+        .spawn()
+        .map_err(|e| format!("Failed to spawn update script: {e}"))?;
+    Ok("started".to_string())
+}
+
 /// Read the gateway token from .openclaw.local.json.
 #[tauri::command]
 fn read_gateway_token() -> Result<String, String> {
@@ -336,7 +354,7 @@ fn main() {
         }))
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![read_gateway_token, open_url_in_browser, toggle_devtools, save_upload, sync_to_ceg, check_ollama_live, launch_ollama, ensure_ollama, check_custom_model, check_openclaw, ensure_environment, get_installed_version, read_repo_version])
+        .invoke_handler(tauri::generate_handler![read_gateway_token, open_url_in_browser, toggle_devtools, save_upload, sync_to_ceg, check_ollama_live, launch_ollama, ensure_ollama, check_custom_model, check_openclaw, ensure_environment, get_installed_version, read_repo_version, run_local_update])
         .setup(|app| {
             #[cfg(debug_assertions)]
             if let Some(window) = app.get_webview_window("main") {

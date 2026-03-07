@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { emit } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
@@ -16,6 +16,21 @@ interface TitlebarProps {
 }
 
 export function Titlebar({ sidebarOpen = false, onToggleSidebar, updateAvailable = false, availableVersion = null }: TitlebarProps) {
+  const [updating, setUpdating] = useState(false);
+
+  const handleUpdate = useCallback(() => {
+    if (updating) return;
+    const confirmed = window.confirm(
+      `Update Zuberi to v${availableVersion}? This will build and reinstall the app.`
+    );
+    if (!confirmed) return;
+    setUpdating(true);
+    invoke('run_local_update').catch((err) => {
+      console.error('[Zuberi] run_local_update failed:', err);
+      setUpdating(false);
+    });
+  }, [updating, availableVersion]);
+
   // ── Global keyboard shortcuts ─────────────────────────────────
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -96,13 +111,15 @@ export function Titlebar({ sidebarOpen = false, onToggleSidebar, updateAvailable
       <div className="titlebar-controls">
         <UsageMeter />
         {updateAvailable && (
-          <div
+          <button
             className="titlebar-button titlebar-button--update"
-            title={`Update available: v${availableVersion}`}
-            style={{ pointerEvents: 'none' }}
+            title={updating ? 'Updating...' : `Update available: v${availableVersion} — click to update`}
+            onClick={handleUpdate}
+            disabled={updating}
+            aria-label="Update available"
           >
-            <span className="update-dot" />
-          </div>
+            <span className={updating ? '' : 'update-dot'} style={updating ? { width: 8, height: 8, borderRadius: '50%', background: 'var(--text-muted)', display: 'block' } : undefined} />
+          </button>
         )}
         <button className="titlebar-button" onClick={handleMinimize} aria-label="Minimize">
           <Minus size={14} />

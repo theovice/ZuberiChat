@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { emit } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import {
@@ -13,6 +14,21 @@ interface SidebarProps {
 }
 
 export function Sidebar({ open, updateAvailable = false, availableVersion = null }: SidebarProps) {
+  const [updating, setUpdating] = useState(false);
+
+  const handleUpdate = () => {
+    if (updating) return;
+    const confirmed = window.confirm(
+      `Update Zuberi to v${availableVersion}? This will build and reinstall the app.`
+    );
+    if (!confirmed) return;
+    setUpdating(true);
+    invoke('run_local_update').catch((err) => {
+      console.error('[Zuberi] run_local_update failed:', err);
+      setUpdating(false);
+    });
+  };
+
   return (
     <div
       className="sidebar"
@@ -56,16 +72,23 @@ export function Sidebar({ open, updateAvailable = false, availableVersion = null
         </button>
 
         {updateAvailable && availableVersion && (
-          <div
+          <button
+            onClick={handleUpdate}
+            disabled={updating}
             style={{
               padding: '6px 12px',
               fontSize: 11,
-              color: '#f0a500',
+              color: updating ? 'var(--text-muted)' : '#f0a500',
               marginTop: 4,
+              background: 'none',
+              border: 'none',
+              cursor: updating ? 'default' : 'pointer',
+              textAlign: 'left',
+              width: '100%',
             }}
           >
-            Update available: v{availableVersion}
-          </div>
+            {updating ? 'Updating...' : `Update available: v${availableVersion}`}
+          </button>
         )}
       </div>
     </div>
