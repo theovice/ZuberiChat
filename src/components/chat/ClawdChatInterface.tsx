@@ -9,6 +9,7 @@ import { ModeSelector } from '@/components/chat/ModeSelector';
 // GpuStatus removed from toolbar — component kept for future use
 import { ZuberiContextMenu } from '@/components/layout/ZuberiContextMenu';
 import { AttachButton, FileChips, type QueuedFile } from '@/components/chat/FileAttachments';
+import { ensureOllama, launchOllama } from '@/lib/ollama';
 
 type ChatRole = 'user' | 'assistant';
 
@@ -115,6 +116,8 @@ export function ClawdChatInterface() {
   // File attachment state
   const [queuedFiles, setQueuedFiles] = useState<QueuedFile[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
+  // Ollama health state
+  const [ollamaDown, setOllamaDown] = useState(false);
 
   // ── New Conversation handler (shared between menu event and context menu) ──
   const handleNewConversation = useCallback(() => {
@@ -413,7 +416,25 @@ export function ClawdChatInterface() {
       });
   }, []);
 
-  // Auto-refresh models every 30s
+  // Ensure Ollama is running on mount, then fetch models
+  useEffect(() => {
+    let cancelled = false;
+    ensureOllama().then((ok) => {
+      if (cancelled) return;
+      if (ok) {
+        console.info('[Zuberi] Ollama is live');
+        setOllamaDown(false);
+        fetchModels();
+      } else {
+        console.warn('[Zuberi] Ollama is not running');
+        setOllamaDown(true);
+      }
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Auto-refresh models every 30s (only when handshake is complete)
   useEffect(() => {
     if (!handshakeComplete) return;
     fetchModels();
@@ -460,6 +481,20 @@ export function ClawdChatInterface() {
       console.error('[Zuberi] Failed to clear GPU:', err);
     }
   }, [fetchGpuModel]);
+
+  // ── Retry Ollama handler (for ModelSelector recovery UI) ──
+  const handleRetryOllama = useCallback(async () => {
+    setOllamaDown(false); // optimistic
+    const ok = await launchOllama();
+    if (ok) {
+      console.info('[Zuberi] Ollama launched via retry');
+      setOllamaDown(false);
+      fetchModels();
+    } else {
+      console.warn('[Zuberi] Ollama retry failed');
+      setOllamaDown(true);
+    }
+  }, [fetchModels]);
 
   // ── Auto-resize textarea: 1 line → max ~6 lines, then scroll ──
   useEffect(() => {
@@ -778,6 +813,8 @@ export function ClawdChatInterface() {
                   onClearGpu={handleClearGpu}
                   onOpen={fetchModels}
                   onModelLoaded={fetchGpuModel}
+                  ollamaDown={ollamaDown}
+                  onRetryOllama={handleRetryOllama}
                 />
               </div>
             </div>

@@ -23,9 +23,13 @@ type ModelSelectorProps = {
   onOpen?: () => void;
   /** Called after preload request fires — refreshes GPU model indicator. */
   onModelLoaded?: () => void;
+  /** True when Ollama is detected as not running. */
+  ollamaDown?: boolean;
+  /** Called to attempt launching Ollama and retrying. */
+  onRetryOllama?: () => void;
 };
 
-export function ModelSelector({ send, isConnected, sessionKey, models, onClearGpu, onOpen, onModelLoaded }: ModelSelectorProps) {
+export function ModelSelector({ send, isConnected, sessionKey, models, onClearGpu, onOpen, onModelLoaded, ollamaDown, onRetryOllama }: ModelSelectorProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPos, setMenuPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
@@ -170,7 +174,45 @@ export function ModelSelector({ send, isConnected, sessionKey, models, onClearGp
             zIndex: 10001,
           }}
         >
-          {models.length === 0 && (
+          {models.length === 0 && ollamaDown && (
+            <div style={{ padding: '8px 12px' }}>
+              <div style={{ color: '#c03030', fontSize: 11, marginBottom: 6 }}>
+                Ollama is not running
+              </div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    closeMenu();
+                    onRetryOllama?.();
+                  }}
+                  style={{
+                    background: '#3a3938',
+                    border: '1px solid #4a4947',
+                    color: '#f0a020',
+                    fontSize: 11,
+                    padding: '3px 10px',
+                    cursor: 'pointer',
+                    borderRadius: 3,
+                  }}
+                >
+                  Start Ollama
+                </button>
+                <span
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    closeMenu();
+                    onRetryOllama?.();
+                  }}
+                  style={{ color: '#f0a020', fontSize: 11, cursor: 'pointer', textDecoration: 'underline' }}
+                >
+                  Retry
+                </span>
+              </div>
+            </div>
+          )}
+          {models.length === 0 && !ollamaDown && (
             <div className="ctx-menu-item" style={{ opacity: 0.5, cursor: 'default' }}>
               <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>
                 {listLoading ? 'Loading models...' : 'No models available'}

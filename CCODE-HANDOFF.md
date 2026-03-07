@@ -1,6 +1,6 @@
 # ZuberiChat — ccode Handoff
 
-**Updated:** 2026-03-06
+**Updated:** 2026-03-07
 **Repo:** C:\Users\PLUTO\github\Repo\ZuberiChat
 **Installed version:** 0.1.1
 **Repo version:** 0.1.1
@@ -39,15 +39,22 @@ About Zuberi text: `Zuberi v0.1.1\nWahwearro Holdings LLC`
 
 - `find_config()` in main.rs searches: OPENCLAW_CONFIG env var → exe walk-up → cwd → USERPROFILE → LOCALAPPDATA\Zuberi
 - `.openclaw.local.json` lives at repo root (dev) and `C:\Users\PLUTO\.openclaw.local.json` (production fallback)
+- Ollama health check: `check_ollama_live()` → GET `http://127.0.0.1:11434/api/tags` with 2s timeout (Rust/reqwest)
+- Ollama auto-launch: `ensure_ollama()` checks liveness, spawns `ollama serve` if needed, polls 10×700ms
+- `launch_ollama()` sets `OLLAMA_ORIGINS=http://tauri.localhost` on the spawned process
+- Frontend `src/lib/ollama.ts` wraps Tauri IPC calls with try/catch (graceful fail in vitest)
+- `ClawdChatInterface.tsx` calls `ensureOllama()` on mount before `fetchModels()`, sets `ollamaDown` state
+- `ModelSelector.tsx` shows "Ollama is not running" + Start/Retry UI when `ollamaDown && models.length === 0`
 
 ## Key File Locations
 
 | File | Purpose |
 |------|---------|
 | `src-tauri/tauri.conf.json` | App version, CSP, window config, bundle config |
-| `src-tauri/Cargo.toml` | Rust deps: tauri 2, serde, single-instance, process, opener |
+| `src-tauri/Cargo.toml` | Rust deps: tauri 2, serde, single-instance, process, opener, reqwest, tokio |
 | `src-tauri/capabilities/default.json` | Tauri v2 permissions (core, window, process, opener) |
-| `src-tauri/src/main.rs` | Tauri commands: read_gateway_token, open_url_in_browser, toggle_devtools, save_upload, sync_to_ceg |
+| `src-tauri/src/main.rs` | Tauri commands: read_gateway_token, open_url_in_browser, toggle_devtools, save_upload, sync_to_ceg, check_ollama_live, launch_ollama, ensure_ollama |
+| `src/lib/ollama.ts` | Frontend wrappers for Ollama Tauri IPC (ensureOllama, launchOllama) |
 | `src/components/layout/Sidebar.tsx` | 3 items: New chat, Settings, Kanban Board |
 | `src/components/layout/Titlebar.tsx` | Window controls, sidebar toggle, UsageMeter, keyboard shortcuts |
 | `src/components/layout/ZuberiContextMenu.tsx` | Right-click menu: File, Kanban, Edit, View, Help (About Zuberi) |
@@ -62,11 +69,11 @@ About Zuberi text: `Zuberi v0.1.1\nWahwearro Holdings LLC`
 ## Last 5 Commits
 
 ```
+a8aa435 RTL-039: Ollama health check and auto-launch on startup
+8fbecfc RTL-038: Fix Ollama CORS panic and OpenClaw gateway origin rejection
 f06ef97 RTL-037: Post-fix production build installed
 a7c775c RTL-037: Fix OLLAMA_ORIGINS for dev+prod, fix gateway token path resolution
 4d17829 RTL-036: Fix Tauri IPC CSP and Ollama CORS origin for production build
-472bf04 Add CCODE-HANDOFF.md, CSP fix, and About text update
-8f18317 Remove GitHub Actions and Tauri updater — fully local build
 ```
 
 ## Do Not Touch
@@ -88,12 +95,16 @@ a7c775c RTL-037: Fix OLLAMA_ORIGINS for dev+prod, fix gateway token path resolut
 
 ## Last Task Completed
 
-RTL-038: Fixed runtime CORS and gateway origin issues blocking the installed app.
-- **Ollama CORS panic**: `tauri://localhost` causes `gin-contrib/cors` to panic (non-http scheme). Fixed to `http://tauri.localhost,http://localhost:3000`
-- **OpenClaw gateway origin rejection**: Added `http://tauri.localhost` and `tauri://localhost` to `controlUi.allowedOrigins` in `C:\Users\PLUTO\openclaw_config\openclaw.json`
-- Gateway restarted via `docker compose restart openclaw-gateway`
-- Ollama restarted with corrected env var, both CORS tests pass (200)
-- Production build installed (RTL-037), 13/13 smoke tests passing
+RTL-039: Ollama health check and auto-launch on startup.
+- Added `reqwest` (0.12, rustls-tls) and `tokio` (time) to Cargo.toml
+- Three new Tauri commands in main.rs: `check_ollama_live()`, `launch_ollama()`, `ensure_ollama()`
+- `check_ollama_live()` — GET `http://127.0.0.1:11434/api/tags` with 2s timeout via reqwest
+- `launch_ollama()` — spawns `ollama serve` with `OLLAMA_ORIGINS=http://tauri.localhost`
+- `ensure_ollama()` — checks liveness, launches if down, polls 10×700ms until up
+- Created `src/lib/ollama.ts` — frontend wrappers with try/catch for vitest compatibility
+- `ClawdChatInterface.tsx` calls `ensureOllama()` on mount, sets `ollamaDown` state, skips `fetchModels()` if down
+- `ModelSelector.tsx` shows "Ollama is not running" + Start Ollama button + Retry link when down
+- 13/13 smoke tests, build verified (5/5), NSIS installed
 
 ## Next Task
 

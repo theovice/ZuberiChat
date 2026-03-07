@@ -131,6 +131,65 @@ fn sync_to_ceg(local_path: String) -> Result<String, String> {
     }
 }
 
+/// Check if Ollama is reachable at http://127.0.0.1:11434/api/tags.
+/// Returns Ok(true) if 200, Ok(false) for any error.
+#[tauri::command]
+async fn check_ollama_live() -> Result<bool, String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(2))
+        .build()
+        .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
+
+    match client.get("http://127.0.0.1:11434/api/tags").send().await {
+        Ok(resp) => Ok(resp.status().is_success()),
+        Err(_) => Ok(false),
+    }
+}
+
+/// Launch Ollama serve with OLLAMA_ORIGINS set for the Tauri production origin.
+#[tauri::command]
+fn launch_ollama() -> Result<(), String> {
+    Command::new("ollama")
+        .arg("serve")
+        .env("OLLAMA_ORIGINS", "http://tauri.localhost")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .map_err(|e| format!("Failed to spawn ollama serve: {}", e))?;
+
+    println!("[Zuberi] Spawned ollama serve");
+    Ok(())
+}
+
+/// Ensure Ollama is running: check first, launch if needed, poll until ready.
+/// Returns Ok(true) if Ollama is live, Ok(false) if it never came up.
+#[tauri::command]
+async fn ensure_ollama() -> Result<bool, String> {
+    // Already running?
+    if check_ollama_live().await.unwrap_or(false) {
+        println!("[Zuberi] Ollama already running");
+        return Ok(true);
+    }
+
+    // Try to launch
+    if let Err(e) = launch_ollama() {
+        println!("[Zuberi] Failed to launch Ollama: {}", e);
+        return Ok(false);
+    }
+
+    // Poll up to 10 times, 700ms apart
+    for i in 1..=10 {
+        tokio::time::sleep(std::time::Duration::from_millis(700)).await;
+        if check_ollama_live().await.unwrap_or(false) {
+            println!("[Zuberi] Ollama came up after {} polls", i);
+            return Ok(true);
+        }
+    }
+
+    println!("[Zuberi] Ollama did not come up after 10 polls");
+    Ok(false)
+}
+
 /// Read the gateway token from .openclaw.local.json.
 #[tauri::command]
 fn read_gateway_token() -> Result<String, String> {
@@ -161,7 +220,7 @@ fn main() {
         }))
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![read_gateway_token, open_url_in_browser, toggle_devtools, save_upload, sync_to_ceg])
+        .invoke_handler(tauri::generate_handler![read_gateway_token, open_url_in_browser, toggle_devtools, save_upload, sync_to_ceg, check_ollama_live, launch_ollama, ensure_ollama])
         .setup(|app| {
             #[cfg(debug_assertions)]
             if let Some(window) = app.get_webview_window("main") {
