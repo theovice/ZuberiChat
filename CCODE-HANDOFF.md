@@ -2,8 +2,8 @@
 
 **Updated:** 2026-03-07
 **Repo:** C:\Users\PLUTO\github\Repo\ZuberiChat
-**Installed version:** 0.1.1
-**Repo version:** 0.1.1
+**Installed version:** 0.1.2
+**Repo version:** 0.1.2
 **Smoke tests:** 13/13 (run `pnpm test` to verify)
 
 ## Current Sidebar State
@@ -40,8 +40,13 @@ About Zuberi text: `Zuberi v0.1.1\nWahwearro Holdings LLC`
 - `find_config()` in main.rs searches: OPENCLAW_CONFIG env var → exe walk-up → cwd → USERPROFILE → LOCALAPPDATA\Zuberi
 - `.openclaw.local.json` lives at repo root (dev) and `C:\Users\PLUTO\.openclaw.local.json` (production fallback)
 - Ollama health check: `check_ollama_live()` → GET `http://127.0.0.1:11434/api/tags` with 2s timeout (Rust/reqwest)
-- Ollama auto-launch: `ensure_ollama()` checks liveness, spawns `ollama serve` if needed, polls 10×700ms
+- Ollama auto-launch: `ensure_ollama()` checks liveness, spawns `ollama serve` if needed, polls 15×1000ms
+- `launch_ollama()` uses full path `C:\Users\PLUTO\AppData\Local\Programs\Ollama\ollama.exe`
 - `launch_ollama()` sets `OLLAMA_ORIGINS=http://tauri.localhost` on the spawned process
+- `launch_ollama()` uses `CREATE_NO_WINDOW` (0x08000000) to suppress terminal window
+- `ensure_ollama()` uses `tokio::time::sleep` — never `std::thread::sleep` in async
+- Success verified by HTTP health check on `/api/tags` only, not tray icon presence
+- Failure path: `%LOCALAPPDATA%\Ollama\server.log` and app.log
 - Frontend `src/lib/ollama.ts` wraps Tauri IPC calls with try/catch (graceful fail in vitest)
 - `ClawdChatInterface.tsx` calls `ensureOllama()` on mount before `fetchModels()`, sets `ollamaDown` state
 - `ModelSelector.tsx` shows "Ollama is not running" + Start/Retry UI when `ollamaDown && models.length === 0`
@@ -69,11 +74,11 @@ About Zuberi text: `Zuberi v0.1.1\nWahwearro Holdings LLC`
 ## Last 5 Commits
 
 ```
-a8aa435 RTL-039: Ollama health check and auto-launch on startup
+d1809d7 RTL-039b: Silent Ollama launch, tokio sleep, health-check verification
+330079f RTL-039: Ollama health check and auto-launch on startup
 8fbecfc RTL-038: Fix Ollama CORS panic and OpenClaw gateway origin rejection
 f06ef97 RTL-037: Post-fix production build installed
 a7c775c RTL-037: Fix OLLAMA_ORIGINS for dev+prod, fix gateway token path resolution
-4d17829 RTL-036: Fix Tauri IPC CSP and Ollama CORS origin for production build
 ```
 
 ## Do Not Touch
@@ -95,15 +100,12 @@ a7c775c RTL-037: Fix OLLAMA_ORIGINS for dev+prod, fix gateway token path resolut
 
 ## Last Task Completed
 
-RTL-039: Ollama health check and auto-launch on startup.
-- Added `reqwest` (0.12, rustls-tls) and `tokio` (time) to Cargo.toml
-- Three new Tauri commands in main.rs: `check_ollama_live()`, `launch_ollama()`, `ensure_ollama()`
-- `check_ollama_live()` — GET `http://127.0.0.1:11434/api/tags` with 2s timeout via reqwest
-- `launch_ollama()` — spawns `ollama serve` with `OLLAMA_ORIGINS=http://tauri.localhost`
-- `ensure_ollama()` — checks liveness, launches if down, polls 10×700ms until up
-- Created `src/lib/ollama.ts` — frontend wrappers with try/catch for vitest compatibility
-- `ClawdChatInterface.tsx` calls `ensureOllama()` on mount, sets `ollamaDown` state, skips `fetchModels()` if down
-- `ModelSelector.tsx` shows "Ollama is not running" + Start Ollama button + Retry link when down
+RTL-039b: Silent Ollama launch, tokio sleep, health-check verification.
+- `launch_ollama()` now uses full path to ollama.exe and `CREATE_NO_WINDOW` flag — no terminal window
+- `launch_ollama()` changed from sync `fn` to `async fn`
+- `ensure_ollama()` polls 15×1000ms (was 10×700ms) using `tokio::time::sleep`
+- `ModelSelector.tsx` error state now shows log path: `%LOCALAPPDATA%\Ollama\server.log`
+- Functional test: killed Ollama, launched Zuberi, health check passed on poll 1 (HTTP 200, 5 models)
 - 13/13 smoke tests, build verified (5/5), NSIS installed
 
 ## Next Task

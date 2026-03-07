@@ -179,6 +179,9 @@ export function ModelSelector({ send, isConnected, sessionKey, models, onClearGp
               <div style={{ color: '#c03030', fontSize: 11, marginBottom: 6 }}>
                 Ollama is not running
               </div>
+              <div style={{ color: 'var(--text-muted)', fontSize: 10, marginBottom: 6 }}>
+                Auto-launch failed. If this persists, check: %LOCALAPPDATA%\Ollama\server.log
+              </div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <button
                   type="button"

@@ -131,62 +131,48 @@ fn sync_to_ceg(local_path: String) -> Result<String, String> {
     }
 }
 
-/// Check if Ollama is reachable at http://127.0.0.1:11434/api/tags.
-/// Returns Ok(true) if 200, Ok(false) for any error.
 #[tauri::command]
 async fn check_ollama_live() -> Result<bool, String> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(2))
         .build()
-        .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
-
+        .map_err(|e| e.to_string())?;
     match client.get("http://127.0.0.1:11434/api/tags").send().await {
-        Ok(resp) => Ok(resp.status().is_success()),
+        Ok(r) => Ok(r.status().is_success()),
         Err(_) => Ok(false),
     }
 }
 
-/// Launch Ollama serve with OLLAMA_ORIGINS set for the Tauri production origin.
 #[tauri::command]
-fn launch_ollama() -> Result<(), String> {
-    Command::new("ollama")
+async fn launch_ollama() -> Result<(), String> {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+    let ollama_path = r"C:\Users\PLUTO\AppData\Local\Programs\Ollama\ollama.exe";
+    std::process::Command::new(ollama_path)
         .arg("serve")
         .env("OLLAMA_ORIGINS", "http://tauri.localhost")
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
+        .creation_flags(CREATE_NO_WINDOW)
         .spawn()
-        .map_err(|e| format!("Failed to spawn ollama serve: {}", e))?;
-
-    println!("[Zuberi] Spawned ollama serve");
+        .map_err(|e| format!("Failed to spawn Ollama: {e}"))?;
     Ok(())
 }
 
-/// Ensure Ollama is running: check first, launch if needed, poll until ready.
-/// Returns Ok(true) if Ollama is live, Ok(false) if it never came up.
 #[tauri::command]
 async fn ensure_ollama() -> Result<bool, String> {
-    // Already running?
+    // Already running — nothing to do
     if check_ollama_live().await.unwrap_or(false) {
-        println!("[Zuberi] Ollama already running");
         return Ok(true);
     }
-
-    // Try to launch
-    if let Err(e) = launch_ollama() {
-        println!("[Zuberi] Failed to launch Ollama: {}", e);
-        return Ok(false);
-    }
-
-    // Poll up to 10 times, 700ms apart
-    for i in 1..=10 {
-        tokio::time::sleep(std::time::Duration::from_millis(700)).await;
+    // Attempt launch
+    launch_ollama().await?;
+    // Poll up to 15s using tokio async sleep (never block the thread)
+    for _ in 0..15 {
+        tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
         if check_ollama_live().await.unwrap_or(false) {
-            println!("[Zuberi] Ollama came up after {} polls", i);
             return Ok(true);
         }
     }
-
-    println!("[Zuberi] Ollama did not come up after 10 polls");
+    // Health check failed — return false so frontend can show error + log path
     Ok(false)
 }
 
