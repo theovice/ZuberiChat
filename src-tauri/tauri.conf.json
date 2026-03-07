@@ -43,7 +43,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEM5RjRBRkE1NUI5NjkxREIKUldUYmtaWmJwYS8weWRnbHFNN3RkK0JNOHU4ejM2R0EvRmlHOE1qVTZ4MGU3MGgyK0huSnFnTUYK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEM1MjA2RkQzMTM4Q0U1QkQKUldTOTVZd1QwMjhneGMrQlFEakl4dUE0anZMWjlyRUNZK3hxUzg0MktHOGdleUpER2xHdFJXUkcK",
       "endpoints": [
         "https://github.com/theovice/ZuberiChat/releases/latest/download/latest.json"
       ],
