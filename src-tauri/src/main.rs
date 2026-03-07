@@ -299,7 +299,9 @@ fn read_repo_version() -> Result<VersionInfo, String> {
     let repo_version_path = r"C:\Users\PLUTO\github\Repo\ZuberiChat\version.json";
     let contents = fs::read_to_string(repo_version_path)
         .map_err(|_| "repo_unavailable".to_string())?;
-    let info: VersionInfo = serde_json::from_str(&contents)
+    // Strip UTF-8 BOM if present — PowerShell 5.1 writes BOM by default
+    let contents = contents.strip_prefix('\u{FEFF}').unwrap_or(&contents);
+    let info: VersionInfo = serde_json::from_str(contents)
         .map_err(|_| "repo_unavailable".to_string())?;
     Ok(info)
 }

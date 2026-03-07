@@ -44,7 +44,9 @@ $versionObj = @{
 }
 
 $outPath = Join-Path $repoRoot 'version.json'
-$versionObj | ConvertTo-Json -Depth 2 | Set-Content -Path $outPath -Encoding UTF8
+# Use WriteAllText to avoid UTF-8 BOM — PS 5.1 Set-Content -Encoding UTF8 always writes BOM
+$json = $versionObj | ConvertTo-Json -Depth 2
+[System.IO.File]::WriteAllText($outPath, $json, (New-Object System.Text.UTF8Encoding $false))
 
 Write-Host "Generated $outPath"
 Write-Host "  version: $version"
