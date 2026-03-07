@@ -26,7 +26,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "createUpdaterArtifacts": true,
+    "createUpdaterArtifacts": false,
     "icon": [
       "icons/zuberi.ico",
       "icons/icon.png"
@@ -41,15 +41,5 @@
       }
     }
   },
-  "plugins": {
-    "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEM1MjA2RkQzMTM4Q0U1QkQKUldTOTVZd1QwMjhneGMrQlFEakl4dUE0anZMWjlyRUNZK3hxUzg0MktHOGdleUpER2xHdFJXUkcK",
-      "endpoints": [
-        "https://github.com/theovice/ZuberiChat/releases/latest/download/latest.json"
-      ],
-      "windows": {
-        "installMode": "passive"
-      }
-    }
-  }
+  "plugins": {}
 }

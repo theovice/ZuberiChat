@@ -16,7 +16,6 @@
     "core:window:allow-set-size",
     "core:window:allow-set-min-size",
     "core:window:allow-set-position",
-    "updater:default",
     "process:default",
     "opener:default"
   ]

@@ -3,12 +3,9 @@ import { listen } from "@tauri-apps/api/event";
 import { Titlebar } from "./components/layout/Titlebar";
 import { Sidebar } from "./components/layout/Sidebar";
 import { ClawdChatInterface } from "./components/chat/ClawdChatInterface";
-import { useUpdater } from "./hooks/useUpdater";
-
 const SIDEBAR_KEY = "zuberi:sidebar-open";
 
 export default function App() {
-  const { updateAvailable, triggerUpdate } = useUpdater();
   const [sidebarOpen, setSidebarOpen] = useState(() => {
     return localStorage.getItem(SIDEBAR_KEY) === "true";
   });
@@ -39,8 +36,6 @@ export default function App() {
       }}
     >
       <Titlebar
-        updateAvailable={updateAvailable}
-        onUpdateClick={triggerUpdate}
         sidebarOpen={sidebarOpen}
         onToggleSidebar={toggleSidebar}
       />
