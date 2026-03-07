@@ -153,10 +153,12 @@ c8fb3af RTL-034: Fix read_repo_version parse failure
 
 ## Last Task Completed
 
-RTL-034 Debug: Fix update execution path after OK click.
-- Root cause: `Command::new("powershell").creation_flags(CREATE_NEW_CONSOLE).spawn()` fails to show a visible console window when the parent process (zuberichat.exe) has piped stdio handles inherited from the `pnpm tauri dev` pipeline (bash → pnpm → tauri-cli → cargo → exe). Rust always sets `STARTF_USESTDHANDLES`, routing the child's I/O to pipes instead of the new console.
-- Fix: replaced direct PowerShell spawn with `cmd /c start "Zuberi Update" powershell ...`. The intermediary cmd.exe runs hidden (`CREATE_NO_WINDOW`), but the `start` built-in reliably creates a visible window for PowerShell via ShellExecute.
-- 13/13 smoke tests pass, `pnpm tauri dev` builds and launches cleanly
+RTL-034 Fix: PowerShell stderr handling in update-local.ps1.
+- Root cause: `$ErrorActionPreference = 'Stop'` + `2>&1` stderr capture caused PowerShell to convert Vitest's stderr progress output into terminating NativeCommandError exceptions, aborting the script before `$LASTEXITCODE` could be checked — even though tests passed 13/13.
+- Fix: Added `Invoke-Native` helper that temporarily sets `$ErrorActionPreference = 'Continue'` around each native command invocation (`pnpm test`, `pnpm tauri build`, `verify-build.ps1`), captures `$LASTEXITCODE` immediately, restores `'Stop'`, and logs the exit code. Success/failure is determined solely by exit code.
+- `$ErrorActionPreference = 'Stop'` is preserved globally for PowerShell cmdlet safety (Test-Path, Get-ChildItem, etc.)
+- All steps log `$LASTEXITCODE` to `logs/update.log`
+- 13/13 smoke tests pass, full pipeline completes: test → build → verify → installer launch
 
 ## Next Task
 
