@@ -22,7 +22,7 @@ About Zuberi text: `Zuberi v0.1.1\nWahwearro Holdings LLC`
 - Tauri v2: `security.csp` lives inside `app` object (`app.security.csp`), NOT at root level
 - CSP must include: `connect-src 'self' ipc: http://ipc.localhost http://localhost:11434 ws://127.0.0.1:18789`
 - CSP must include: `default-src 'self' tauri: asset: ipc: http://ipc.localhost` for Tauri IPC to work
-- Ollama CORS: must set `OLLAMA_ORIGINS=tauri://localhost` at User env level on KILO
+- Ollama CORS: `OLLAMA_ORIGINS=tauri://localhost,http://tauri.localhost,http://localhost:3000` at User env level on KILO
 - Tauri IPC CSP: `connect-src` must include `ipc: http://ipc.localhost` or IPC calls fail in production
 - Model selector auto-refresh gated on `handshakeComplete` (line 418 of ClawdChatInterface.tsx) — expected, not a bug
 - Clicking model selector dropdown bypasses gate via `onOpen` -> `fetchModels()` and fetches from Ollama directly
@@ -35,6 +35,9 @@ About Zuberi text: `Zuberi v0.1.1\nWahwearro Holdings LLC`
 - Capabilities file: `src-tauri/capabilities/default.json` — do NOT add `updater:default` or `http:` scopes here
 - Cargo.toml version is `0.1.0` (Cargo-level), tauri.conf.json version is `0.1.1` (app-level) — Tauri uses tauri.conf.json
 
+- `find_config()` in main.rs searches: OPENCLAW_CONFIG env var → exe walk-up → cwd → USERPROFILE → LOCALAPPDATA\Zuberi
+- `.openclaw.local.json` lives at repo root (dev) and `C:\Users\PLUTO\.openclaw.local.json` (production fallback)
+
 ## Key File Locations
 
 | File | Purpose |
@@ -42,6 +45,7 @@ About Zuberi text: `Zuberi v0.1.1\nWahwearro Holdings LLC`
 | `src-tauri/tauri.conf.json` | App version, CSP, window config, bundle config |
 | `src-tauri/Cargo.toml` | Rust deps: tauri 2, serde, single-instance, process, opener |
 | `src-tauri/capabilities/default.json` | Tauri v2 permissions (core, window, process, opener) |
+| `src-tauri/src/main.rs` | Tauri commands: read_gateway_token, open_url_in_browser, toggle_devtools, save_upload, sync_to_ceg |
 | `src/components/layout/Sidebar.tsx` | 3 items: New chat, Settings, Kanban Board |
 | `src/components/layout/Titlebar.tsx` | Window controls, sidebar toggle, UsageMeter, keyboard shortcuts |
 | `src/components/layout/ZuberiContextMenu.tsx` | Right-click menu: File, Kanban, Edit, View, Help (About Zuberi) |
@@ -51,15 +55,16 @@ About Zuberi text: `Zuberi v0.1.1\nWahwearro Holdings LLC`
 | `src/test/smoke.test.tsx` | 13 smoke tests |
 | `package.json` | Version 0.1.1, key deps: tauri-apps/api, react 19, vite 6, vitest 4 |
 | `scripts/verify-build.ps1` | Post-build binary verification (checks CSP strings embedded in exe) |
+| `.openclaw.local.json` | Gateway token for OpenClaw WebSocket (repo root, copied to USERPROFILE for prod) |
 
 ## Last 5 Commits
 
 ```
+(pending) RTL-037: Fix OLLAMA_ORIGINS for dev+prod, fix gateway token path resolution
+4d17829 RTL-036: Fix Tauri IPC CSP and Ollama CORS origin for production build
 472bf04 Add CCODE-HANDOFF.md, CSP fix, and About text update
 8f18317 Remove GitHub Actions and Tauri updater — fully local build
 1fffbf1 Bump version to 0.1.1
-4ce5c06 Rewrite release workflow with manual build steps for debuggability
-f9ba4b3 Fix release workflow: hardcode empty signing key password
 ```
 
 ## Do Not Touch
@@ -68,7 +73,7 @@ f9ba4b3 Fix release workflow: hardcode empty signing key password
 - **Tauri updater:** stripped (commit `8f18317`) — do not re-add `tauri-plugin-updater`, `useUpdater.ts`, or `updater:default` capability
 - **src-tauri/capabilities/default.json:** do not add `http:` scope here; CSP is in `app.security.csp`
 - **Model selector disabled condition:** do not add `models.length === 0` — causes chicken-and-egg bug
-- **OLLAMA_ORIGINS env var:** set at User level on KILO — do not remove or change
+- **OLLAMA_ORIGINS env var:** `tauri://localhost,http://tauri.localhost,http://localhost:3000` — set at User level on KILO, covers prod + dev origins
 
 ## Pre-flight Checklist (run before any task)
 
@@ -81,11 +86,11 @@ f9ba4b3 Fix release workflow: hardcode empty signing key password
 
 ## Last Task Completed
 
-RTL-036: Fixed Tauri IPC CSP and Ollama CORS origin for production build.
-- CSP updated: added `ipc: http://ipc.localhost` to `default-src` and `connect-src`
-- `OLLAMA_ORIGINS=tauri://localhost` set at User env level, Ollama restarted
-- Created `scripts/verify-build.ps1` for post-build binary verification
-- Built, verified (5/5 checks pass), installed. 13/13 tests passing.
+RTL-037: Fixed OLLAMA_ORIGINS for dev+prod and gateway token path resolution.
+- OLLAMA_ORIGINS updated to `tauri://localhost,http://tauri.localhost,http://localhost:3000` (covers prod and dev origins)
+- `find_config()` in main.rs expanded: added OPENCLAW_CONFIG env var override, USERPROFILE fallback, LOCALAPPDATA\Zuberi fallback
+- Copied `.openclaw.local.json` to `C:\Users\PLUTO\.openclaw.local.json` for production path resolution
+- Ollama restarted, cargo check passes, 13/13 smoke tests passing
 
 ## Next Task
 

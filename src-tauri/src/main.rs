@@ -6,16 +6,26 @@ use std::path::PathBuf;
 use std::process::Command;
 use tauri::Manager;
 
-/// Locate .openclaw.local.json by walking up from the executable.
-/// Dev:  exe is src-tauri/target/debug/zuberichat.exe → root is 4 levels up.
-/// Prod: exe sits next to the config file (or falls back to cwd).
+/// Locate .openclaw.local.json by searching multiple locations.
+/// Dev:  exe is src-tauri/target/debug/zuberichat.exe — walk-up finds repo root.
+/// Prod: exe is in C:\Program Files\Zuberi — falls through to USERPROFILE or LOCALAPPDATA.
 fn find_config() -> Result<PathBuf, String> {
-    // Try 1: Walk up from executable (covers dev layout)
+    let filename = ".openclaw.local.json";
+
+    // Try 1: Explicit override via OPENCLAW_CONFIG env var
+    if let Ok(path) = std::env::var("OPENCLAW_CONFIG") {
+        let p = PathBuf::from(&path);
+        if p.exists() {
+            return Ok(p);
+        }
+    }
+
+    // Try 2: Walk up from executable (covers dev layout)
     if let Ok(exe) = std::env::current_exe() {
         let mut dir = exe.parent().map(|p| p.to_path_buf());
         for _ in 0..5 {
             if let Some(ref d) = dir {
-                let candidate = d.join(".openclaw.local.json");
+                let candidate = d.join(filename);
                 if candidate.exists() {
                     return Ok(candidate);
                 }
@@ -24,15 +34,31 @@ fn find_config() -> Result<PathBuf, String> {
         }
     }
 
-    // Try 2: Current working directory
+    // Try 3: Current working directory
     if let Ok(cwd) = std::env::current_dir() {
-        let candidate = cwd.join(".openclaw.local.json");
+        let candidate = cwd.join(filename);
         if candidate.exists() {
             return Ok(candidate);
         }
     }
 
-    Err("Could not find .openclaw.local.json".to_string())
+    // Try 4: User home directory (%USERPROFILE%)
+    if let Ok(home) = std::env::var("USERPROFILE") {
+        let candidate = PathBuf::from(&home).join(filename);
+        if candidate.exists() {
+            return Ok(candidate);
+        }
+    }
+
+    // Try 5: Local app data (%LOCALAPPDATA%\Zuberi)
+    if let Ok(local) = std::env::var("LOCALAPPDATA") {
+        let candidate = PathBuf::from(&local).join("Zuberi").join(filename);
+        if candidate.exists() {
+            return Ok(candidate);
+        }
+    }
+
+    Err("Could not find .openclaw.local.json — searched exe walk-up, cwd, USERPROFILE, LOCALAPPDATA\\Zuberi".to_string())
 }
 
 /// Open a URL in the system default browser.
