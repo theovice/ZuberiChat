@@ -90,7 +90,9 @@ About Zuberi text: `Zuberi v0.1.1\nWahwearro Holdings LLC`
 - `repo_unavailable` errors stay silent — no UI shown, just console warning
 - Hook disables itself entirely if `get_installed_version` fails (vitest graceful)
 - RTL-034 complete: Phase 1 (detect + indicate) + Phase 2 (one-click update trigger)
-- `run_local_update` Rust command: spawns `scripts/update-local.ps1` via PowerShell with `CREATE_NEW_CONSOLE` (0x00000010), returns immediately
+- `run_local_update` Rust command: spawns `cmd /c start "Zuberi Update" powershell -ExecutionPolicy Bypass -File update-local.ps1`
+- `run_local_update` uses `CREATE_NO_WINDOW` (0x08000000) on the intermediary cmd.exe — `start` creates the visible PowerShell window
+- Do NOT use `Command::new("powershell").creation_flags(CREATE_NEW_CONSOLE)` — fails to show a window when parent has piped stdio (e.g. `pnpm tauri dev` pipeline via cargo)
 - `update-local.ps1` pipeline: `pnpm test` → `pnpm tauri build` → `verify-build.ps1` → find newest NSIS installer → launch installer
 - `update-local.ps1` logs all output to `logs/update.log` in repo root
 - NSIS installer search order: `*setup*.exe` → `*Setup*.exe` → any `*.exe` in `src-tauri/target/release/bundle/nsis/`
@@ -125,11 +127,11 @@ About Zuberi text: `Zuberi v0.1.1\nWahwearro Holdings LLC`
 ## Last 5 Commits
 
 ```
+PENDING RTL-034: Fix update execution path after OK click
+0c1367b Update CCODE-HANDOFF.md with RTL-034 Part 3 commit hash
 3f2d3f2 RTL-034 Part 3: Local one-click update with PowerShell script
 8c52475 Update CCODE-HANDOFF.md with RTL-034 debug fix commit hash
 c8fb3af RTL-034: Fix read_repo_version parse failure
-31f00a5 RTL-034 Part 2: Frontend version polling and update indicators
-dcbad3d RTL-034 Part 1: Version poller backend + version.json generation
 ```
 
 ## Do Not Touch
@@ -151,14 +153,10 @@ dcbad3d RTL-034 Part 1: Version poller backend + version.json generation
 
 ## Last Task Completed
 
-RTL-034 Part 3: Local one-click update runner.
-- New file: `scripts/update-local.ps1` — test → build → verify → find NSIS installer → launch
-- New Rust command: `run_local_update` — spawns update script in new console window, returns immediately
-- Sidebar "Update available: vX.Y.Z" indicator is now a clickable button with `window.confirm()` dialog
-- Titlebar amber dot is now a clickable button — dot turns gray while updating
-- Both buttons call `invoke('run_local_update')` and show "Updating..." state
+RTL-034 Debug: Fix update execution path after OK click.
+- Root cause: `Command::new("powershell").creation_flags(CREATE_NEW_CONSOLE).spawn()` fails to show a visible console window when the parent process (zuberichat.exe) has piped stdio handles inherited from the `pnpm tauri dev` pipeline (bash → pnpm → tauri-cli → cargo → exe). Rust always sets `STARTF_USESTDHANDLES`, routing the child's I/O to pipes instead of the new console.
+- Fix: replaced direct PowerShell spawn with `cmd /c start "Zuberi Update" powershell ...`. The intermediary cmd.exe runs hidden (`CREATE_NO_WINDOW`), but the `start` built-in reliably creates a visible window for PowerShell via ShellExecute.
 - 13/13 smoke tests pass, `pnpm tauri dev` builds and launches cleanly
-- RTL-034 fully complete: Part 1 (backend) + Part 2 (frontend) + Debug (BOM fix) + Part 3 (update runner)
 
 ## Next Task
 

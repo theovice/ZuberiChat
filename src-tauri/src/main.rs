@@ -306,19 +306,26 @@ fn read_repo_version() -> Result<VersionInfo, String> {
     Ok(info)
 }
 
-/// Spawn the local update script (test → build → install) in a detached process.
+/// Spawn the local update script (test → build → install) in a visible console window.
+/// Uses `cmd /c start` to ensure a visible PowerShell window appears on the desktop.
+/// Direct `Command::new("powershell").creation_flags(CREATE_NEW_CONSOLE)` fails to show
+/// a window when the parent process has piped stdio (e.g. `pnpm tauri dev` pipeline).
 /// Returns immediately — does not wait for completion.
 #[tauri::command]
 fn run_local_update() -> Result<String, String> {
     use std::os::windows::process::CommandExt;
-    const CREATE_NEW_CONSOLE: u32 = 0x00000010;
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
     let script_path = r"C:\Users\PLUTO\github\Repo\ZuberiChat\scripts\update-local.ps1";
     if !std::path::Path::new(script_path).exists() {
         return Err(format!("Update script not found at {script_path}"));
     }
-    std::process::Command::new("powershell")
-        .args(["-ExecutionPolicy", "Bypass", "-File", script_path])
-        .creation_flags(CREATE_NEW_CONSOLE)
+    // Use `cmd /c start` to reliably create a visible console window.
+    // The intermediary cmd.exe is hidden (CREATE_NO_WINDOW), but `start` always
+    // opens a new visible window for the spawned PowerShell process.
+    std::process::Command::new("cmd")
+        .args(["/c", "start", "Zuberi Update", "powershell",
+               "-ExecutionPolicy", "Bypass", "-File", script_path])
+        .creation_flags(CREATE_NO_WINDOW)
         .spawn()
         .map_err(|e| format!("Failed to spawn update script: {e}"))?;
     Ok("started".to_string())
