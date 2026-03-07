@@ -8,9 +8,11 @@ import {
 
 interface SidebarProps {
   open: boolean;
+  updateAvailable?: boolean;
+  availableVersion?: string | null;
 }
 
-export function Sidebar({ open }: SidebarProps) {
+export function Sidebar({ open, updateAvailable = false, availableVersion = null }: SidebarProps) {
   return (
     <div
       className="sidebar"
@@ -52,6 +54,19 @@ export function Sidebar({ open }: SidebarProps) {
           <LayoutGrid size={16} />
           <span>Kanban Board</span>
         </button>
+
+        {updateAvailable && availableVersion && (
+          <div
+            style={{
+              padding: '6px 12px',
+              fontSize: 11,
+              color: '#f0a500',
+              marginTop: 4,
+            }}
+          >
+            Update available: v{availableVersion}
+          </div>
+        )}
       </div>
     </div>
   );

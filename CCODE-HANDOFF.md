@@ -82,6 +82,12 @@ About Zuberi text: `Zuberi v0.1.1\nWahwearro Holdings LLC`
 - `get_installed_version` uses `env!("APP_VERSION")` not `env!("CARGO_PKG_VERSION")` — Cargo.toml version differs from tauri.conf.json
 - `read_repo_version` reads hardcoded path `C:\Users\PLUTO\github\Repo\ZuberiChat\version.json`, returns "repo_unavailable" on any error
 - VersionInfo struct: `{ version, commit, builtAt }` — camelCase via `#[serde(rename_all = "camelCase")]`
+- Version poller frontend (RTL-034 Part 2): `useVersionPoller` hook polls `read_repo_version` every 60s, compares semver + commit
+- Titlebar amber dot uses existing `.update-dot` CSS class (ember pulse animation), rendered only when `updateAvailable === true`
+- Sidebar shows "Update available: vX.Y.Z" in amber (#f0a500) at bottom, only when update available
+- `repo_unavailable` errors stay silent — no UI shown, just console warning
+- Hook disables itself entirely if `get_installed_version` fails (vitest graceful)
+- Phase 1 complete — detect and indicate only, no rebuild/relaunch functionality
 
 ## Key File Locations
 
@@ -94,12 +100,13 @@ About Zuberi text: `Zuberi v0.1.1\nWahwearro Holdings LLC`
 | `src-tauri/build.rs` | Build script: embeds APP_VERSION, BUILD_COMMIT, BUILD_TIMESTAMP at compile time |
 | `scripts/generate-version.ps1` | Pre-build script: generates version.json from tauri.conf.json + git |
 | `src/lib/ollama.ts` | Frontend wrappers for Tauri IPC (ensureOllama, launchOllama, ensureEnvironment) |
-| `src/components/layout/Sidebar.tsx` | 3 items: New chat, Settings, Kanban Board |
-| `src/components/layout/Titlebar.tsx` | Window controls, sidebar toggle, UsageMeter, keyboard shortcuts |
+| `src/hooks/useVersionPoller.ts` | Version polling hook: 60s poll, semver compare, update detection |
+| `src/components/layout/Sidebar.tsx` | 3 items: New chat, Settings, Kanban Board + version indicator |
+| `src/components/layout/Titlebar.tsx` | Window controls, sidebar toggle, UsageMeter, amber dot, keyboard shortcuts |
 | `src/components/layout/ZuberiContextMenu.tsx` | Right-click menu: File, Kanban, Edit, View, Help (About Zuberi) |
 | `src/components/chat/ModelSelector.tsx` | Dropdown model picker, fetches from Ollama, preloads to GPU |
 | `src/components/chat/ClawdChatInterface.tsx` | Main chat component, WebSocket to OpenClaw, fetchModels, drag-drop |
-| `src/App.tsx` | Root component, sidebar state, Titlebar + Sidebar + ClawdChatInterface |
+| `src/App.tsx` | Root component, sidebar state, version poller, Titlebar + Sidebar + ClawdChatInterface |
 | `src/test/smoke.test.tsx` | 13 smoke tests |
 | `package.json` | Version 0.1.1, key deps: tauri-apps/api, react 19, vite 6, vitest 4 |
 | `scripts/verify-build.ps1` | Post-build binary verification (checks CSP strings embedded in exe) |
@@ -108,11 +115,11 @@ About Zuberi text: `Zuberi v0.1.1\nWahwearro Holdings LLC`
 ## Last 5 Commits
 
 ```
-9b5894d RTL-034 Part 1: Version poller backend + version.json generation
+(pending) RTL-034 Part 2: Frontend version polling and update indicators
+dcbad3d RTL-034 Part 1: Version poller backend + version.json generation
 dc05fdc RTL-043: Sync OpenClaw model catalog with installed Ollama models
 f6d53da RTL-042d: Tune compaction for 32K context + re-enable memory flush
 dbf2363 RTL-042c: Disable pre-compaction memory flush — fast falsification test
-c46d6b5 RTL-042b: Fix workspace .md no-think framing causing first-run NO response
 ```
 
 ## Do Not Touch
@@ -134,16 +141,17 @@ c46d6b5 RTL-042b: Fix workspace .md no-think framing causing first-run NO respon
 
 ## Last Task Completed
 
-RTL-034 Part 1: Version poller backend + version.json generation.
-- New files: `scripts/generate-version.ps1`, `version.json` (gitignored)
-- New Rust commands: `get_installed_version`, `read_repo_version`
-- `build.rs` embeds commit + timestamp at compile time via `cargo:rustc-env`
-- APP_VERSION parsed from tauri.conf.json in build.rs (not CARGO_PKG_VERSION)
-- `serde_json` added to `[build-dependencies]` in Cargo.toml
+RTL-034 Part 2: Frontend version polling and update indicators.
+- New file: `src/hooks/useVersionPoller.ts` — 60s poll loop, semver compare, graceful vitest fallback
+- Modified: `src/App.tsx` — wired `useVersionPoller` hook, passes `updateAvailable`/`availableVersion` to Titlebar + Sidebar
+- Modified: `src/components/layout/Titlebar.tsx` — amber dot (`.update-dot` CSS) between UsageMeter and minimize, `pointerEvents: 'none'`
+- Modified: `src/components/layout/Sidebar.tsx` — "Update available: vX.Y.Z" in amber (#f0a500) after Kanban Board
+- Polling: 60s interval, `read_repo_version` IPC, custom semver comparison (no library)
+- `repo_unavailable` stays silent — console warning only, no UI
+- Hook self-disables if `get_installed_version` fails (vitest graceful)
+- Phase 1 complete — detect and indicate only, no rebuild/relaunch
 - 13/13 smoke tests pass, `pnpm tauri dev` builds and launches cleanly
-- Part 2 (frontend polling + UI) pending
 
 ## Next Task
 
-RTL-034 Part 2: Frontend polling + UI — 60s poll loop, amber dot in titlebar,
-version indicator in sidebar when installed version < repo version.
+None queued — RTL-034 complete (both parts).

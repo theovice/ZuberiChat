@@ -11,9 +11,11 @@ import { UsageMeter } from '../chat/UsageMeter';
 interface TitlebarProps {
   sidebarOpen?: boolean;
   onToggleSidebar?: () => void;
+  updateAvailable?: boolean;
+  availableVersion?: string | null;
 }
 
-export function Titlebar({ sidebarOpen = false, onToggleSidebar }: TitlebarProps) {
+export function Titlebar({ sidebarOpen = false, onToggleSidebar, updateAvailable = false, availableVersion = null }: TitlebarProps) {
   // ── Global keyboard shortcuts ─────────────────────────────────
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -93,6 +95,15 @@ export function Titlebar({ sidebarOpen = false, onToggleSidebar }: TitlebarProps
       {/* Right: usage meter + update indicator + window controls */}
       <div className="titlebar-controls">
         <UsageMeter />
+        {updateAvailable && (
+          <div
+            className="titlebar-button titlebar-button--update"
+            title={`Update available: v${availableVersion}`}
+            style={{ pointerEvents: 'none' }}
+          >
+            <span className="update-dot" />
+          </div>
+        )}
         <button className="titlebar-button" onClick={handleMinimize} aria-label="Minimize">
           <Minus size={14} />
         </button>
