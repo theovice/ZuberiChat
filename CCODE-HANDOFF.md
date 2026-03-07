@@ -68,6 +68,9 @@ About Zuberi text: `Zuberi v0.1.1\nWahwearro Holdings LLC`
 - "no-think" in system prompt may cause model to echo "NO" on first turn before conversational pattern is established
 - qwen3:14b-fast now thinks natively via template — "no-think" label is factually wrong post-RTL-041
 - Workspace files edited: AGENTS.md (2 lines), MEMORY.md (3 lines), TOOLS.md (2 lines). HEARTBEAT.md and SOUL.md unchanged.
+- Pre-compaction memory flush disabled (`memoryFlush.enabled: false`) — was causing ~153s silent housekeeping turn on `agent:main:main` before user's real run; model output "NO" instead of "NO_REPLY" sentinel, blocking interactive chat
+- Compaction settings (tuned for 200K, need review for 32K): mode=safeguard, reserveTokensFloor=20000 (61% of 32K), softThresholdTokens=4000
+- If delay disappears with flush disabled, next step is tuning compaction for 32K context (reserveTokensFloor too high)
 
 ## Key File Locations
 
@@ -92,11 +95,11 @@ About Zuberi text: `Zuberi v0.1.1\nWahwearro Holdings LLC`
 ## Last 5 Commits
 
 ```
-cd99440 RTL-042b: Fix workspace .md no-think framing causing first-run NO response
+cf3f6ca RTL-042c: Disable pre-compaction memory flush
+c46d6b5 RTL-042b: Fix workspace .md no-think framing causing first-run NO response
 7ccd9a9 RTL-042a: Disable heartbeat — session collision fix
 70fdad1 RTL-041: Fix NO prefix — remove think scaffolding from Modelfile template
 2427039 RTL-040: Self-healing startup — conditional model check + OpenClaw health
-5f15e39 RTL-039b: Silent Ollama launch, tokio sleep, health-check verification
 ```
 
 ## Do Not Touch
@@ -118,11 +121,12 @@ cd99440 RTL-042b: Fix workspace .md no-think framing causing first-run NO respon
 
 ## Last Task Completed
 
-RTL-042b: Fix workspace .md no-think framing causing first-run NO response.
-- Replaced "no-think" with "fast" / "speed-optimized" in AGENTS.md, MEMORY.md, TOOLS.md
-- Root cause: "no-think" label in system prompt was stale (Modelfile fixed in RTL-041) and model echoed "NO" on first turn
-- 7 targeted edits across 3 files. HEARTBEAT.md and SOUL.md unchanged (no problematic patterns)
-- OpenClaw restarted to reload workspace files, health check 200
+RTL-042c: Disable pre-compaction memory flush (fast falsification test).
+- `memoryFlush.enabled` set to `false` in `openclaw.json` `agents.defaults.compaction.memoryFlush`
+- Root cause: memory flush ran as silent housekeeping turn on `agent:main:main` before user's real run (~153s delay); model output "NO" instead of expected "NO_REPLY" sentinel, so suppression failed
+- Compaction settings recorded: mode=safeguard, reserveTokensFloor=20000, softThresholdTokens=4000 — all tuned for 200K context, not 32K
+- OpenClaw restarted, health check 200 (healthy)
+- Next: if delay disappears, tune compaction for 32K context
 
 ## Next Task
 
