@@ -72,7 +72,10 @@ About Zuberi text: `Zuberi v0.1.1\nWahwearro Holdings LLC`
 - Compaction settings (tuned for 32K): mode=safeguard, reserveTokensFloor=4000 (12% of 32K), softThresholdTokens=2000, memoryFlush.enabled=true
 - Old values (tuned for 200K): reserveTokensFloor=20000 (61% of 32K), softThresholdTokens=4000 — flush triggered at only 8768 tokens, workspace files consumed most of that
 - New flush trigger: 32768 - 4000 - 2000 = 26768 tokens before flush fires — gives model full working space
-- contextWindow is per-model only in openclaw.json (all 3 models at 32768), no global setting
+- contextWindow is per-model only in openclaw.json (all 4 models at 32768), no global setting
+- OpenClaw model catalog: qwen3:14b-fast, qwen3:14b, qwen3-vl:8b-fast, gpt-oss:20b — synced to installed Ollama models (RTL-043)
+- Removed qwen3-vl:8b from catalog, replaced with qwen3-vl:8b-fast; added qwen3:14b
+- reasoning: false for all configured models — do not enable without explicit instruction
 
 ## Key File Locations
 
@@ -97,11 +100,11 @@ About Zuberi text: `Zuberi v0.1.1\nWahwearro Holdings LLC`
 ## Last 5 Commits
 
 ```
-e6c6b21 RTL-042d: Tune compaction for 32K context + re-enable memory flush
+cf111ed RTL-043: Sync OpenClaw model catalog with installed Ollama models
+f6d53da RTL-042d: Tune compaction for 32K context + re-enable memory flush
 dbf2363 RTL-042c: Disable pre-compaction memory flush — fast falsification test
 c46d6b5 RTL-042b: Fix workspace .md no-think framing causing first-run NO response
 7ccd9a9 RTL-042a: Disable heartbeat — session collision fix
-70fdad1 RTL-041: Fix NO prefix — remove think scaffolding from Modelfile template
 ```
 
 ## Do Not Touch
@@ -123,14 +126,14 @@ c46d6b5 RTL-042b: Fix workspace .md no-think framing causing first-run NO respon
 
 ## Last Task Completed
 
-RTL-042d: Tune compaction thresholds for 32K context + re-enable memory flush.
-- `reserveTokensFloor`: 20000 → 4000 (was 61% of 32K, now 12%)
-- `softThresholdTokens`: 4000 → 2000
-- `memoryFlush.enabled`: false → true (re-enabled after tuning)
-- Flush trigger moves from 8768 tokens → 26768 tokens — workspace files no longer cause immediate flush
-- contextWindow confirmed per-model only (all 32768), no global setting
+RTL-043: Sync OpenClaw model catalog with installed Ollama models.
+- Configured models now: qwen3:14b-fast, qwen3:14b, qwen3-vl:8b-fast, gpt-oss:20b
+- Removed qwen3-vl:8b from active catalog (replaced by qwen3-vl:8b-fast)
+- Added qwen3:14b (stock Qwen3 14B, no custom template)
+- reasoning: false for all configured models
+- No other config changes made (baseUrl, compaction, heartbeat all unchanged)
 - OpenClaw restarted, health check 200 (healthy)
-- Compaction values verified inside container
+- Functional: text chat on qwen3:14b-fast ✅, qwen3:14b responds ✅, qwen3-vl:8b-fast in catalog ✅
 
 ## Next Task
 
