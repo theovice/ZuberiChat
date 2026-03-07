@@ -60,7 +60,7 @@ About Zuberi text: `Zuberi v0.1.1\nWahwearro Holdings LLC`
 ## Last 5 Commits
 
 ```
-(pending) RTL-037: Fix OLLAMA_ORIGINS for dev+prod, fix gateway token path resolution
+a7c775c RTL-037: Fix OLLAMA_ORIGINS for dev+prod, fix gateway token path resolution
 4d17829 RTL-036: Fix Tauri IPC CSP and Ollama CORS origin for production build
 472bf04 Add CCODE-HANDOFF.md, CSP fix, and About text update
 8f18317 Remove GitHub Actions and Tauri updater — fully local build
@@ -86,11 +86,12 @@ About Zuberi text: `Zuberi v0.1.1\nWahwearro Holdings LLC`
 
 ## Last Task Completed
 
-RTL-037: Fixed OLLAMA_ORIGINS for dev+prod and gateway token path resolution.
+RTL-037: Fixed OLLAMA_ORIGINS for dev+prod, gateway token path resolution, production build + install.
 - OLLAMA_ORIGINS updated to `tauri://localhost,http://tauri.localhost,http://localhost:3000` (covers prod and dev origins)
 - `find_config()` in main.rs expanded: added OPENCLAW_CONFIG env var override, USERPROFILE fallback, LOCALAPPDATA\Zuberi fallback
 - Copied `.openclaw.local.json` to `C:\Users\PLUTO\.openclaw.local.json` for production path resolution
 - Ollama restarted, cargo check passes, 13/13 smoke tests passing
+- Built, verified (5/5 checks pass), installed via NSIS. Post-install 13/13 tests passing.
 
 ## Next Task
 
