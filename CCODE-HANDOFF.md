@@ -125,7 +125,7 @@ About Zuberi text: `Zuberi v0.1.1\nWahwearro Holdings LLC`
 ## Last 5 Commits
 
 ```
-PENDING RTL-034 Part 3: Local one-click update with PowerShell script
+3f2d3f2 RTL-034 Part 3: Local one-click update with PowerShell script
 8c52475 Update CCODE-HANDOFF.md with RTL-034 debug fix commit hash
 c8fb3af RTL-034: Fix read_repo_version parse failure
 31f00a5 RTL-034 Part 2: Frontend version polling and update indicators
