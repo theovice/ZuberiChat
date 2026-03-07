@@ -656,7 +656,34 @@ export function ClawdChatInterface() {
   };
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-4xl flex-col px-6" style={{ overflow: 'visible' }}>
+    <div
+      className="mx-auto flex h-full w-full max-w-4xl flex-col px-6"
+      style={{ overflow: 'visible', position: 'relative' }}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {/* ── Full-area drag overlay ── */}
+      {isDragOver && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: 50,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(14, 13, 12, 0.88)',
+            border: '2px dashed #f0a020',
+            pointerEvents: 'none',
+          }}
+        >
+          <span style={{ color: '#f0a020', fontSize: 16, fontWeight: 500 }}>
+            Drop files here to add to chat
+          </span>
+        </div>
+      )}
+
       {/* ── Logo / Connection Status (right-click for context menu) ── */}
       <ZuberiContextMenu onNewConversation={handleNewConversation}>
         <div style={{ paddingTop: 40, flexShrink: 0, overflow: 'visible', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -690,9 +717,6 @@ export function ClawdChatInterface() {
       {/* ── Chat Input (Claude Code style) with drag-drop zone ── */}
       <form
         onSubmit={handleSubmit}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
         style={{ flexShrink: 0, paddingBottom: 16, paddingTop: 8 }}
       >
         <div className="mx-auto max-w-3xl">
@@ -701,7 +725,7 @@ export function ClawdChatInterface() {
             data-rounded
             className="overflow-hidden border"
             style={{
-              borderColor: isDragOver ? '#f0a020' : '#3a3938',
+              borderColor: '#3a3938',
               transition: 'border-color 150ms',
             }}
           >
@@ -736,15 +760,6 @@ export function ClawdChatInterface() {
                 </button>
               </div>
 
-              {/* Drag-over overlay */}
-              {isDragOver && (
-                <div
-                  className="absolute inset-0 flex items-center justify-center text-sm text-[#f0a020]"
-                  style={{ pointerEvents: 'none', zIndex: 10, background: 'rgba(43,42,40,0.92)' }}
-                >
-                  Drop files to attach
-                </div>
-              )}
             </div>
 
             {/* Row 2 — Controls toolbar, visually connected */}

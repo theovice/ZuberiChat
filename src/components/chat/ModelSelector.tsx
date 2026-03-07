@@ -134,14 +134,14 @@ export function ModelSelector({ send, isConnected, sessionKey, models, onClearGp
         ref={btnRef}
         type="button"
         onClick={toggleMenu}
-        disabled={listLoading || models.length === 0 || isLoading}
+        disabled={isLoading}
         className="flex h-7 items-center gap-1 border px-2 text-xs transition-colors disabled:opacity-50"
         style={{
           width: 150,
           background: 'var(--surface-1)',
           borderColor: isLoading ? '#f0a020' : 'var(--border-medium)',
           color: 'var(--text-secondary)',
-          cursor: listLoading ? 'default' : 'pointer',
+          cursor: isLoading ? 'default' : 'pointer',
         }}
       >
         <span className="flex-1 truncate text-left">{displayName}</span>
@@ -170,6 +170,13 @@ export function ModelSelector({ send, isConnected, sessionKey, models, onClearGp
             zIndex: 10001,
           }}
         >
+          {models.length === 0 && (
+            <div className="ctx-menu-item" style={{ opacity: 0.5, cursor: 'default' }}>
+              <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                {listLoading ? 'Loading models...' : 'No models available'}
+              </span>
+            </div>
+          )}
           {models.map((m) => (
             <div
               key={m.id}

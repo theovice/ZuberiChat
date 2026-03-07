@@ -143,10 +143,11 @@ describe('ModelSelector', () => {
         models={[]}
       />,
     );
-    // Custom dropdown uses a button trigger instead of a combobox
+    // Custom dropdown uses a button trigger — clickable even when empty
+    // so onOpen can trigger a model list refresh
     const btn = screen.getByRole('button');
     expect(btn).toBeInTheDocument();
-    expect(btn).toBeDisabled();
+    expect(btn).not.toBeDisabled();
   });
 
   it('renders with mock models and shows selected model', async () => {
