@@ -60,6 +60,10 @@ About Zuberi text: `Zuberi v0.1.1\nWahwearro Holdings LLC`
 - If "NO" persists after template fix, inspect OpenClaw request payload for think field overrides — request-level think controls are separate from template
 - Modelfile backup always at `C:\Users\PLUTO\Modelfile.qwen3-14b-fast.bak`
 - `check_custom_model()` checks presence only, not template correctness — known gap
+- Heartbeat disabled (`every: "0m"`) in `openclaw.json` `agents.defaults.heartbeat` — was colliding with interactive chat session
+- Root cause: heartbeat ran on `agent:main:main` same session as user chat
+- Re-enable only after separate session routing is confirmed in OpenClaw config
+- seq gap WS error in ZuberiChat still needs fixing (RTL-042b)
 
 ## Key File Locations
 
@@ -84,11 +88,11 @@ About Zuberi text: `Zuberi v0.1.1\nWahwearro Holdings LLC`
 ## Last 5 Commits
 
 ```
-e2b4b39 RTL-041: Fix NO prefix — remove think scaffolding from Modelfile template
+50b260b RTL-042a: Disable heartbeat — session collision fix
+70fdad1 RTL-041: Fix NO prefix — remove think scaffolding from Modelfile template
 2427039 RTL-040: Self-healing startup — conditional model check + OpenClaw health
 5f15e39 RTL-039b: Silent Ollama launch, tokio sleep, health-check verification
 330079f RTL-039: Ollama health check and auto-launch on startup
-8fbecfc RTL-038: Fix Ollama CORS panic and OpenClaw gateway origin rejection
 ```
 
 ## Do Not Touch
@@ -110,14 +114,11 @@ e2b4b39 RTL-041: Fix NO prefix — remove think scaffolding from Modelfile templ
 
 ## Last Task Completed
 
-RTL-041: Fix NO prefix — remove think scaffolding from Modelfile template.
-- Removed forced `<think>\n\n</think>` prefill from `C:\Users\PLUTO\Modelfile.qwen3-14b-fast` TEMPLATE
-- Assistant prefill block retained (`<|im_start|>assistant` + `{{ end }}`) without think tags
-- Rebuilt `qwen3:14b-fast` model via `ollama create` — success
-- `ollama show` confirms no think tags in rebuilt model template
-- Ollama API test: response does NOT start with "NO" — content is clean after native think block
-- qwen3 still generates `<think>` natively (model behavior, not template-forced) — expected
-- OpenClaw restarted, health check 200
+RTL-042a: Disable OpenClaw heartbeat — session collision fix.
+- No heartbeat key existed in openclaw.json — added `agents.defaults.heartbeat.every: "0m"`
+- JSON validated, OpenClaw restarted, health check 200 (healthy)
+- Heartbeat was colliding with interactive chat on same `agent:main:main` session
+- seq gap WS error still needs fix (RTL-042b)
 
 ## Next Task
 
