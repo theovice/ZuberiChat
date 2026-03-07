@@ -22,7 +22,9 @@ About Zuberi text: `Zuberi v0.1.1\nWahwearro Holdings LLC`
 - Tauri v2: `security.csp` lives inside `app` object (`app.security.csp`), NOT at root level
 - CSP must include: `connect-src 'self' ipc: http://ipc.localhost http://localhost:11434 ws://127.0.0.1:18789`
 - CSP must include: `default-src 'self' tauri: asset: ipc: http://ipc.localhost` for Tauri IPC to work
-- Ollama CORS: `OLLAMA_ORIGINS=tauri://localhost,http://tauri.localhost,http://localhost:3000` at User env level on KILO
+- Ollama CORS: `OLLAMA_ORIGINS=http://tauri.localhost,http://localhost:3000` at User env level on KILO
+- Ollama CORS: do NOT use `tauri://localhost` — gin-contrib/cors panics on non-http schemes. Tauri v2 production origin is `http://tauri.localhost`
+- OpenClaw gateway: `controlUi.allowedOrigins` in `C:\Users\PLUTO\openclaw_config\openclaw.json` must include `http://tauri.localhost`
 - Tauri IPC CSP: `connect-src` must include `ipc: http://ipc.localhost` or IPC calls fail in production
 - Model selector auto-refresh gated on `handshakeComplete` (line 418 of ClawdChatInterface.tsx) — expected, not a bug
 - Clicking model selector dropdown bypasses gate via `onOpen` -> `fetchModels()` and fetches from Ollama directly
@@ -60,11 +62,11 @@ About Zuberi text: `Zuberi v0.1.1\nWahwearro Holdings LLC`
 ## Last 5 Commits
 
 ```
+f06ef97 RTL-037: Post-fix production build installed
 a7c775c RTL-037: Fix OLLAMA_ORIGINS for dev+prod, fix gateway token path resolution
 4d17829 RTL-036: Fix Tauri IPC CSP and Ollama CORS origin for production build
 472bf04 Add CCODE-HANDOFF.md, CSP fix, and About text update
 8f18317 Remove GitHub Actions and Tauri updater — fully local build
-1fffbf1 Bump version to 0.1.1
 ```
 
 ## Do Not Touch
@@ -73,7 +75,7 @@ a7c775c RTL-037: Fix OLLAMA_ORIGINS for dev+prod, fix gateway token path resolut
 - **Tauri updater:** stripped (commit `8f18317`) — do not re-add `tauri-plugin-updater`, `useUpdater.ts`, or `updater:default` capability
 - **src-tauri/capabilities/default.json:** do not add `http:` scope here; CSP is in `app.security.csp`
 - **Model selector disabled condition:** do not add `models.length === 0` — causes chicken-and-egg bug
-- **OLLAMA_ORIGINS env var:** `tauri://localhost,http://tauri.localhost,http://localhost:3000` — set at User level on KILO, covers prod + dev origins
+- **OLLAMA_ORIGINS env var:** `http://tauri.localhost,http://localhost:3000` — set at User level on KILO. Do NOT add `tauri://localhost` (causes Ollama CORS library panic)
 
 ## Pre-flight Checklist (run before any task)
 
@@ -86,12 +88,12 @@ a7c775c RTL-037: Fix OLLAMA_ORIGINS for dev+prod, fix gateway token path resolut
 
 ## Last Task Completed
 
-RTL-037: Fixed OLLAMA_ORIGINS for dev+prod, gateway token path resolution, production build + install.
-- OLLAMA_ORIGINS updated to `tauri://localhost,http://tauri.localhost,http://localhost:3000` (covers prod and dev origins)
-- `find_config()` in main.rs expanded: added OPENCLAW_CONFIG env var override, USERPROFILE fallback, LOCALAPPDATA\Zuberi fallback
-- Copied `.openclaw.local.json` to `C:\Users\PLUTO\.openclaw.local.json` for production path resolution
-- Ollama restarted, cargo check passes, 13/13 smoke tests passing
-- Built, verified (5/5 checks pass), installed via NSIS. Post-install 13/13 tests passing.
+RTL-038: Fixed runtime CORS and gateway origin issues blocking the installed app.
+- **Ollama CORS panic**: `tauri://localhost` causes `gin-contrib/cors` to panic (non-http scheme). Fixed to `http://tauri.localhost,http://localhost:3000`
+- **OpenClaw gateway origin rejection**: Added `http://tauri.localhost` and `tauri://localhost` to `controlUi.allowedOrigins` in `C:\Users\PLUTO\openclaw_config\openclaw.json`
+- Gateway restarted via `docker compose restart openclaw-gateway`
+- Ollama restarted with corrected env var, both CORS tests pass (200)
+- Production build installed (RTL-037), 13/13 smoke tests passing
 
 ## Next Task
 
