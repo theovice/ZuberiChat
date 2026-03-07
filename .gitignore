@@ -13,6 +13,7 @@ nul
 *.sig
 *.key
 *.key.pub
+version.json
 
 # Zuberi workspace identity files (belong in openclaw_workspace, not repo)
 AGENTS.md

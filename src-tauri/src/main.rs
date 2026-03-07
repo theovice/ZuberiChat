@@ -1,10 +1,20 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use serde::{Serialize, Deserialize};
 use serde_json::Value;
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 use tauri::Manager;
+
+/// Version information returned by get_installed_version and read_repo_version.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct VersionInfo {
+    version: String,
+    commit: String,
+    built_at: String,
+}
 
 /// Locate .openclaw.local.json by searching multiple locations.
 /// Dev:  exe is src-tauri/target/debug/zuberichat.exe — walk-up finds repo root.
@@ -272,6 +282,28 @@ async fn ensure_environment() -> Result<serde_json::Value, String> {
     Ok(results)
 }
 
+/// Return the installed app's version info (embedded at compile time).
+#[tauri::command]
+fn get_installed_version() -> Result<VersionInfo, String> {
+    Ok(VersionInfo {
+        version: env!("APP_VERSION").to_string(),
+        commit: env!("BUILD_COMMIT").to_string(),
+        built_at: env!("BUILD_TIMESTAMP").to_string(),
+    })
+}
+
+/// Read version.json from the repo root on disk.
+/// Returns repo_unavailable if the file is missing, unreadable, or invalid JSON.
+#[tauri::command]
+fn read_repo_version() -> Result<VersionInfo, String> {
+    let repo_version_path = r"C:\Users\PLUTO\github\Repo\ZuberiChat\version.json";
+    let contents = fs::read_to_string(repo_version_path)
+        .map_err(|_| "repo_unavailable".to_string())?;
+    let info: VersionInfo = serde_json::from_str(&contents)
+        .map_err(|_| "repo_unavailable".to_string())?;
+    Ok(info)
+}
+
 /// Read the gateway token from .openclaw.local.json.
 #[tauri::command]
 fn read_gateway_token() -> Result<String, String> {
@@ -302,7 +334,7 @@ fn main() {
         }))
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![read_gateway_token, open_url_in_browser, toggle_devtools, save_upload, sync_to_ceg, check_ollama_live, launch_ollama, ensure_ollama, check_custom_model, check_openclaw, ensure_environment])
+        .invoke_handler(tauri::generate_handler![read_gateway_token, open_url_in_browser, toggle_devtools, save_upload, sync_to_ceg, check_ollama_live, launch_ollama, ensure_ollama, check_custom_model, check_openclaw, ensure_environment, get_installed_version, read_repo_version])
         .setup(|app| {
             #[cfg(debug_assertions)]
             if let Some(window) = app.get_webview_window("main") {
