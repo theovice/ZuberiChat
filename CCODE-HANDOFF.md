@@ -14,15 +14,18 @@ Items (in order):
 3. *(spacer)*
 4. **Kanban Board** — icon: LayoutGrid, action: `invoke('open_url_in_browser', { url: 'http://100.100.101.1:3001' })`
 
-About Zuberi location: `ZuberiContextMenu.tsx` (right-click menu → Help → About Zuberi), NOT in the sidebar
+About Zuberi location: `ZuberiContextMenu.tsx` (right-click menu > Help > About Zuberi), NOT in the sidebar
 About Zuberi text: `Zuberi v0.1.1\nWahwearro Holdings LLC`
 
 ## Known Architecture Facts
 
 - Tauri v2: `security.csp` lives inside `app` object (`app.security.csp`), NOT at root level
-- CSP must include: `connect-src 'self' http://localhost:11434 ws://127.0.0.1:18789`
+- CSP must include: `connect-src 'self' ipc: http://ipc.localhost http://localhost:11434 ws://127.0.0.1:18789`
+- CSP must include: `default-src 'self' tauri: asset: ipc: http://ipc.localhost` for Tauri IPC to work
+- Ollama CORS: must set `OLLAMA_ORIGINS=tauri://localhost` at User env level on KILO
+- Tauri IPC CSP: `connect-src` must include `ipc: http://ipc.localhost` or IPC calls fail in production
 - Model selector auto-refresh gated on `handshakeComplete` (line 418 of ClawdChatInterface.tsx) — expected, not a bug
-- Clicking model selector dropdown bypasses gate via `onOpen` → `fetchModels()` and fetches from Ollama directly
+- Clicking model selector dropdown bypasses gate via `onOpen` -> `fetchModels()` and fetches from Ollama directly
 - Model selector button `disabled` condition is `isLoading` only — do NOT re-add `models.length === 0` (causes chicken-and-egg)
 - `fetchModels()` calls `http://localhost:11434/api/tags` — plain GET, no headers
 - `sandbox.docker.network` must stay `"none"` — `"host"` crashes compose stack
@@ -47,21 +50,17 @@ About Zuberi text: `Zuberi v0.1.1\nWahwearro Holdings LLC`
 | `src/App.tsx` | Root component, sidebar state, Titlebar + Sidebar + ClawdChatInterface |
 | `src/test/smoke.test.tsx` | 13 smoke tests |
 | `package.json` | Version 0.1.1, key deps: tauri-apps/api, react 19, vite 6, vitest 4 |
+| `scripts/verify-build.ps1` | Post-build binary verification (checks CSP strings embedded in exe) |
 
 ## Last 5 Commits
 
 ```
+472bf04 Add CCODE-HANDOFF.md, CSP fix, and About text update
 8f18317 Remove GitHub Actions and Tauri updater — fully local build
 1fffbf1 Bump version to 0.1.1
 4ce5c06 Rewrite release workflow with manual build steps for debuggability
 f9ba4b3 Fix release workflow: hardcode empty signing key password
-e833d2b Fix sidebar cleanup, full-area drag-drop overlay, and model selector
 ```
-
-## Uncommitted Changes
-
-- `src-tauri/tauri.conf.json` — added `app.security.csp` (RTL-035: CSP fix for production build)
-- `src/components/layout/ZuberiContextMenu.tsx` — About Zuberi text updated to `Zuberi v0.1.1\nWahwearro Holdings LLC`
 
 ## Do Not Touch
 
@@ -69,6 +68,7 @@ e833d2b Fix sidebar cleanup, full-area drag-drop overlay, and model selector
 - **Tauri updater:** stripped (commit `8f18317`) — do not re-add `tauri-plugin-updater`, `useUpdater.ts`, or `updater:default` capability
 - **src-tauri/capabilities/default.json:** do not add `http:` scope here; CSP is in `app.security.csp`
 - **Model selector disabled condition:** do not add `models.length === 0` — causes chicken-and-egg bug
+- **OLLAMA_ORIGINS env var:** set at User level on KILO — do not remove or change
 
 ## Pre-flight Checklist (run before any task)
 
@@ -77,12 +77,15 @@ e833d2b Fix sidebar cleanup, full-area drag-drop overlay, and model selector
 3. Read this file
 4. Check `git log --oneline -3` to confirm repo state
 5. Check `git status` for uncommitted changes
+6. After `pnpm tauri build`, run `scripts\verify-build.ps1` before installing. If any check fails, do not install — fix and rebuild first.
 
 ## Last Task Completed
 
-RTL-035: Added `app.security.csp` to `tauri.conf.json` — fixes model selector in
-production build. `connect-src` allows `http://localhost:11434` and `ws://127.0.0.1:18789`.
-Built and installed successfully. 13/13 tests passing.
+RTL-036: Fixed Tauri IPC CSP and Ollama CORS origin for production build.
+- CSP updated: added `ipc: http://ipc.localhost` to `default-src` and `connect-src`
+- `OLLAMA_ORIGINS=tauri://localhost` set at User env level, Ollama restarted
+- Created `scripts/verify-build.ps1` for post-build binary verification
+- Built, verified (5/5 checks pass), installed. 13/13 tests passing.
 
 ## Next Task
 
