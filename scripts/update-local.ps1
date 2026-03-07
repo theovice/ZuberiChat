@@ -63,6 +63,17 @@ if ($ec -ne 0) {
 }
 Log 'Build succeeded.'
 
+# Step 2b: Regenerate version.json so it matches the commit embedded in the build
+$genScript = Join-Path $repoRoot 'scripts\generate-version.ps1'
+if (Test-Path $genScript) {
+    $ec = Invoke-Native -Label 'generate-version.ps1' -Command 'powershell' -Arguments @('-ExecutionPolicy', 'Bypass', '-File', $genScript)
+    if ($ec -ne 0) {
+        Log "WARNING: generate-version.ps1 failed (exit code $ec) - version indicator may persist"
+    } else {
+        Log 'version.json regenerated.'
+    }
+}
+
 # Step 3: Run verify-build.ps1 if it exists
 $verifyScript = Join-Path $repoRoot 'scripts\verify-build.ps1'
 if (Test-Path $verifyScript) {
@@ -109,4 +120,4 @@ Log "Found installer: $($installer.FullName)"
 # Step 5: Launch the installer (normal mode, not silent)
 Log 'Launching installer...'
 Start-Process -FilePath $installer.FullName
-Log '=== Zuberi Local Update Complete — installer launched ==='
+Log '=== Zuberi Local Update Complete - installer launched ==='

@@ -93,7 +93,7 @@ About Zuberi text: `Zuberi v0.1.1\nWahwearro Holdings LLC`
 - `run_local_update` Rust command: spawns `cmd /c start "Zuberi Update" powershell -ExecutionPolicy Bypass -File update-local.ps1`
 - `run_local_update` uses `CREATE_NO_WINDOW` (0x08000000) on the intermediary cmd.exe — `start` creates the visible PowerShell window
 - Do NOT use `Command::new("powershell").creation_flags(CREATE_NEW_CONSOLE)` — fails to show a window when parent has piped stdio (e.g. `pnpm tauri dev` pipeline via cargo)
-- `update-local.ps1` pipeline: `pnpm test` → `pnpm tauri build` → `verify-build.ps1` → find newest NSIS installer → launch installer
+- `update-local.ps1` pipeline: `pnpm test` → `pnpm tauri build` → `generate-version.ps1` → `verify-build.ps1` → find newest NSIS installer → launch installer
 - `update-local.ps1` logs all output to `logs/update.log` in repo root
 - NSIS installer search order: `*setup*.exe` → `*Setup*.exe` → any `*.exe` in `src-tauri/target/release/bundle/nsis/`
 - Sidebar "Update available" indicator is a clickable `<button>` — shows `window.confirm()`, calls `invoke('run_local_update')`, shows "Updating..." while running
@@ -153,12 +153,12 @@ c8fb3af RTL-034: Fix read_repo_version parse failure
 
 ## Last Task Completed
 
-RTL-034 Fix: PowerShell stderr handling in update-local.ps1.
-- Root cause: `$ErrorActionPreference = 'Stop'` + `2>&1` stderr capture caused PowerShell to convert Vitest's stderr progress output into terminating NativeCommandError exceptions, aborting the script before `$LASTEXITCODE` could be checked — even though tests passed 13/13.
-- Fix: Added `Invoke-Native` helper that temporarily sets `$ErrorActionPreference = 'Continue'` around each native command invocation (`pnpm test`, `pnpm tauri build`, `verify-build.ps1`), captures `$LASTEXITCODE` immediately, restores `'Stop'`, and logs the exit code. Success/failure is determined solely by exit code.
-- `$ErrorActionPreference = 'Stop'` is preserved globally for PowerShell cmdlet safety (Test-Path, Get-ChildItem, etc.)
-- All steps log `$LASTEXITCODE` to `logs/update.log`
-- 13/13 smoke tests pass, full pipeline completes: test → build → verify → installer launch
+RTL-034 Final: Fix post-install version metadata sync.
+- Root cause: `update-local.ps1` did not regenerate `version.json` after building. The installed EXE embeds `BUILD_COMMIT` at compile time via `build.rs`, but `version.json` retained a stale commit from a previous manual generation. The version poller (`useVersionPoller.ts`) compares `repo.commit !== installed.commit` — stale version.json commit triggered a false "Update available" indicator.
+- Fix: Added `generate-version.ps1` call inside `update-local.ps1` after build succeeds (Step 2b), ensuring `version.json` commit always matches the commit embedded in the built EXE.
+- Pipeline now: test → build → generate-version.json → verify → find installer → launch
+- Also fixed em dash encoding issue in log strings (PowerShell parser choked on UTF-8 em dash in single-quoted strings)
+- 13/13 smoke tests pass, full pipeline completes, version.json commit matches HEAD
 
 ## Next Task
 
