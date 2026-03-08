@@ -1,6 +1,6 @@
 # ZuberiChat — ccode Handoff
 
-**Updated:** 2026-03-07
+**Updated:** 2026-03-08
 **Repo:** C:\Users\PLUTO\github\Repo\ZuberiChat
 **Installed version:** 0.1.2
 **Repo version:** 0.1.2
@@ -101,6 +101,25 @@ About Zuberi text: `Zuberi v0.1.1\nWahwearro Holdings LLC`
 - Titlebar amber dot is a clickable `<button>` — same confirm+invoke pattern, dot turns gray (muted) when updating
 - Both update buttons use local `useState(false)` for `updating` state — no global state needed
 
+## Browser-Safe Preview Mode
+
+The app renders at `localhost:3000` in a plain browser (no Tauri) using the official `@tauri-apps/api/mocks` module. This lets the agent screenshot, inspect DOM, and verify CSS without needing the Tauri native window.
+
+**How it works:**
+- `src/lib/platform.ts` provides `isTauri()` detection and `installBrowserMocks()` which patches `window.__TAURI_INTERNALS__` with mock IPC handlers
+- `src/main.tsx` gates mock install on `!isTauri()` before React mounts, plus wraps `<App />` in an ErrorBoundary
+- Zero changes to any of the 8 files that import Tauri APIs — mocks are transparent
+- In real Tauri mode: `isTauri()` returns true, mocks never installed, zero regression
+
+**Usage (for agent):**
+1. `preview_start browser-preview` (config in `C:\.claude\launch.json`)
+2. Navigate to `http://localhost:3000` if page shows chrome-error
+3. `preview_screenshot` / `preview_snapshot` / `preview_inspect` for UI verification
+
+**What renders:** Titlebar (sidebar toggle, "Zuberi", UsageMeter, window buttons), Sidebar (New chat, Settings, Kanban Board), Chat area (input, send, model selector, attach), "Connection lost" banner (expected — OpenClaw WS unavailable), "no model" in status bar (expected — Ollama unavailable)
+
+**What doesn't work:** WebSocket to OpenClaw (shows "Connection lost"), Ollama model list (shows last-used model from localStorage), window drag/minimize/maximize/close (no-op clicks), process exit (no-op)
+
 ## Key File Locations
 
 | File | Purpose |
@@ -112,6 +131,7 @@ About Zuberi text: `Zuberi v0.1.1\nWahwearro Holdings LLC`
 | `src-tauri/build.rs` | Build script: embeds APP_VERSION, BUILD_COMMIT, BUILD_TIMESTAMP at compile time |
 | `scripts/generate-version.ps1` | Pre-build script: generates version.json from tauri.conf.json + git |
 | `scripts/update-local.ps1` | One-click update: test → build → verify → find NSIS installer → launch |
+| `src/lib/platform.ts` | Tauri runtime detection (`isTauri()`) and browser preview mocks (`installBrowserMocks()`) |
 | `src/lib/ollama.ts` | Frontend wrappers for Tauri IPC (ensureOllama, launchOllama, ensureEnvironment) |
 | `src/hooks/useVersionPoller.ts` | Version polling hook: 60s poll, semver compare, update detection |
 | `src/components/layout/Sidebar.tsx` | 3 items: New chat, Settings, Kanban Board + clickable update indicator |
@@ -128,11 +148,11 @@ About Zuberi text: `Zuberi v0.1.1\nWahwearro Holdings LLC`
 ## Last 5 Commits
 
 ```
+1abd3c2 RTL-034: Force Cargo to re-embed BUILD_COMMIT on every new commit
+e6a153a RTL-034: Fix post-install version metadata sync
+7a1cb2c RTL-034: Fix update script stderr handling
+17a28de Update CCODE-HANDOFF.md with RTL-034 fix commit hash
 03d568b RTL-034: Fix update execution path after OK click
-0c1367b Update CCODE-HANDOFF.md with RTL-034 Part 3 commit hash
-3f2d3f2 RTL-034 Part 3: Local one-click update with PowerShell script
-8c52475 Update CCODE-HANDOFF.md with RTL-034 debug fix commit hash
-c8fb3af RTL-034: Fix read_repo_version parse failure
 ```
 
 ## Do Not Touch
@@ -154,12 +174,8 @@ c8fb3af RTL-034: Fix read_repo_version parse failure
 
 ## Last Task Completed
 
-RTL-034 Final: Fix Cargo incremental build skipping BUILD_COMMIT refresh.
-- Root cause: `build.rs` sets `BUILD_COMMIT` via `cargo:rustc-env`, but `tauri_build::build()` emits specific `cargo:rerun-if-changed` directives (for tauri.conf.json, icons, etc.). When only non-Rust files changed (scripts, docs), Cargo skipped re-running build.rs entirely, leaving the old BUILD_COMMIT baked into the cached binary. The installed EXE had `17a28de` while version.json had `e6a153a`.
-- Fix: Added `cargo:rerun-if-changed=../.git/HEAD` and dynamic watch on the current branch ref file (e.g., `../.git/refs/heads/main`) so Cargo re-runs build.rs whenever HEAD moves to a new commit.
-- Also fixed version.json sync (generate-version.ps1 runs after build in update-local.ps1)
-- 13/13 smoke tests pass
+Browser-safe preview mode: Added `src/lib/platform.ts` and modified `src/main.tsx` to install Tauri IPC mocks when running in a plain browser. Uses `@tauri-apps/api/mocks` (`mockIPC` + `mockWindows`) to patch `window.__TAURI_INTERNALS__` before React mounts. All 8 files that import Tauri APIs work unmodified. 13/13 smoke tests pass. UI renders fully at localhost:3000 via `preview_start browser-preview`.
 
 ## Next Task
 
-None queued — RTL-034 complete (all parts).
+None queued.
