@@ -10,6 +10,9 @@ import { ModeSelector } from '@/components/chat/ModeSelector';
 import { ZuberiContextMenu } from '@/components/layout/ZuberiContextMenu';
 import { AttachButton, FileChips, type QueuedFile } from '@/components/chat/FileAttachments';
 import { ensureEnvironment } from '@/lib/ollama';
+import type { ApprovalRecord, ApprovalStatus, PermissionMode } from '@/types/permissions';
+import { PERMISSION_MODE_TO_EXEC_ASK } from '@/types/permissions';
+import { normalizeApprovalRequest, resolveApprovalDecision } from '@/lib/permissionPolicy';
 
 type ChatRole = 'user' | 'assistant';
 
@@ -119,6 +122,20 @@ export function ClawdChatInterface() {
   // Ollama health state
   const [ollamaDown, setOllamaDown] = useState(false);
 
+  // ── Permission mode state ───────────────────────────────────────
+  const [permissionMode, setPermissionMode] = useState<PermissionMode>(() => {
+    const stored = localStorage.getItem('zuberi-permission-mode');
+    if (stored === 'ask' || stored === 'auto' || stored === 'plan' || stored === 'bypass') {
+      return stored;
+    }
+    return 'ask';
+  });
+  const permissionModeRef = useRef<PermissionMode>(permissionMode);
+  // Track pending approvals by ID
+  const approvalsRef = useRef<Map<string, ApprovalRecord>>(new Map());
+  // Track approval timeout timers for cleanup
+  const approvalTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
   // ── New Conversation handler (shared between menu event and context menu) ──
   const handleNewConversation = useCallback(() => {
     setMessages([]);
@@ -129,6 +146,11 @@ export function ClawdChatInterface() {
     pendingRequestIdsRef.current.clear();
     console.info('[Zuberi] New conversation started');
   }, []);
+
+  // Sync permissionModeRef whenever state changes
+  useEffect(() => {
+    permissionModeRef.current = permissionMode;
+  }, [permissionMode]);
 
   // Load token from .openclaw.local.json via Tauri IPC on mount
   useEffect(() => {
@@ -385,6 +407,109 @@ export function ClawdChatInterface() {
         return;
       }
 
+      // ── Handle exec.approval.requested ──────────────────────────
+      if (message.type === 'event' && message.event === 'exec.approval.requested') {
+        const payload = message.payload as Record<string, unknown> | undefined;
+        if (!payload) return;
+
+        const approvalId = typeof payload.id === 'string' ? payload.id : null;
+        if (!approvalId) {
+          console.warn('[Zuberi] exec.approval.requested missing id:', payload);
+          return;
+        }
+
+        // Deduplicate
+        if (approvalsRef.current.has(approvalId)) return;
+
+        const request = (payload.request ?? payload) as Record<string, unknown>;
+        const normalized = normalizeApprovalRequest(request);
+        const decision = resolveApprovalDecision(permissionModeRef.current, normalized);
+
+        const now = Date.now();
+        const expiresAtMs = typeof payload.expiresAt === 'number'
+          ? payload.expiresAt
+          : now + 120_000;
+
+        const record: ApprovalRecord = {
+          id: approvalId,
+          command: normalized.command,
+          commandArgv: normalized.args.length > 0
+            ? [normalized.command, ...normalized.args]
+            : undefined,
+          cwd: normalized.cwd,
+          host: normalized.host,
+          category: normalized.category,
+          status: 'pending',
+          decisionSource: decision === 'ask' ? 'user' : 'auto',
+          createdAtMs: now,
+          expiresAtMs,
+        };
+
+        if (decision !== 'ask') {
+          // Auto-resolve: send RPC immediately
+          const resolveId = crypto.randomUUID();
+          pendingRequestIdsRef.current.add(resolveId);
+          sendRef.current({
+            type: 'req',
+            id: resolveId,
+            method: 'exec.approval.resolve',
+            params: { id: approvalId, decision },
+          });
+          record.status = (decision === 'deny' ? 'auto_denied' : 'auto_approved') as ApprovalStatus;
+          console.info(`[Zuberi] Auto-resolved approval ${approvalId}: ${decision} (${normalized.category} → ${normalized.command})`);
+        } else {
+          record.status = 'pending';
+          console.info(`[Zuberi] Approval pending ${approvalId}: ${normalized.command} (${normalized.category})`);
+
+          // Set up timeout
+          const remaining = expiresAtMs - now;
+          if (remaining <= 0) {
+            record.status = 'expired';
+          } else {
+            const timer = setTimeout(() => {
+              const existing = approvalsRef.current.get(approvalId);
+              if (existing && existing.status === 'pending') {
+                existing.status = 'expired';
+                console.warn(`[Zuberi] Approval expired: ${approvalId}`);
+              }
+              approvalTimersRef.current.delete(approvalId);
+            }, remaining);
+            approvalTimersRef.current.set(approvalId, timer);
+          }
+        }
+
+        approvalsRef.current.set(approvalId, record);
+        return;
+      }
+
+      // ── Handle exec.approval.resolved ─────────────────────────
+      if (message.type === 'event' && message.event === 'exec.approval.resolved') {
+        const payload = message.payload as Record<string, unknown> | undefined;
+        if (!payload) return;
+
+        const approvalId = typeof payload.id === 'string' ? payload.id : null;
+        if (!approvalId) return;
+
+        const existing = approvalsRef.current.get(approvalId);
+        if (existing) {
+          const resolvedDecision = typeof payload.decision === 'string' ? payload.decision : null;
+          if (resolvedDecision === 'allow-once' || resolvedDecision === 'allow-always') {
+            existing.status = existing.decisionSource === 'auto' ? 'auto_approved' : 'approved';
+          } else if (resolvedDecision === 'deny') {
+            existing.status = existing.decisionSource === 'auto' ? 'auto_denied' : 'denied';
+          }
+
+          // Clear timeout timer
+          const timer = approvalTimersRef.current.get(approvalId);
+          if (timer) {
+            clearTimeout(timer);
+            approvalTimersRef.current.delete(approvalId);
+          }
+          console.info(`[Zuberi] Approval resolved ${approvalId}: ${resolvedDecision}`);
+        }
+        return;
+      }
+
       // ── Silently ignore noisy periodic events ─────────────────────
       if (message.type === 'event' && (message.event === 'health' || message.event === 'tick')) {
         return;
@@ -516,6 +641,28 @@ export function ClawdChatInterface() {
       setOllamaDown(true);
     }
   }, [fetchModels]);
+
+  // ── Permission mode change handler ────────────────────────────
+  const handlePermissionModeChange = useCallback((newMode: PermissionMode) => {
+    setPermissionMode(newMode);
+    permissionModeRef.current = newMode;
+    localStorage.setItem('zuberi-permission-mode', newMode);
+
+    // Send sessions.patch to backend with mapped execAsk value
+    const execAsk = PERMISSION_MODE_TO_EXEC_ASK[newMode];
+    const patchId = crypto.randomUUID();
+    pendingRequestIdsRef.current.add(patchId);
+    send({
+      type: 'req',
+      id: patchId,
+      method: 'sessions.patch',
+      params: {
+        sessionKey: SESSION_KEY,
+        patch: { execAsk },
+      },
+    });
+    console.info(`[Zuberi] Permission mode → ${newMode} (execAsk: ${execAsk})`);
+  }, [send]);
 
   // ── Auto-resize textarea: 1 line → max ~6 lines, then scroll ──
   useEffect(() => {
@@ -823,7 +970,7 @@ export function ClawdChatInterface() {
               style={{ borderTop: '1px solid var(--surface-interactive)' }}
             >
               <AttachButton onFiles={processFiles} />
-              <ModeSelector send={send} sessionKey={SESSION_KEY} />
+              <ModeSelector mode={permissionMode} onModeChange={handlePermissionModeChange} />
               <div className="ml-auto">
                 <ModelSelector
                   send={send}

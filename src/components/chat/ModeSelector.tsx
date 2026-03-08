@@ -1,29 +1,51 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ChevronDown } from 'lucide-react';
-import type { WebSocketMessage } from '@/hooks/useWebSocket';
+import { ChevronDown, ShieldCheck, Code, FileText, AlertTriangle } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import type { PermissionMode } from '@/types/permissions';
 
 type ModeOption = {
   label: string;
-  value: string;
+  value: PermissionMode;
+  description: string;
+  icon: LucideIcon;
+  /** If true, description renders in --status-danger color. */
+  cautionary?: boolean;
 };
 
 const MODE_OPTIONS: ModeOption[] = [
-  { label: 'Auto accept edits', value: 'off' },
-  { label: 'Ask permissions', value: 'on-miss' },
-  { label: 'Always ask', value: 'always' },
+  {
+    label: 'Ask permissions',
+    value: 'ask',
+    description: 'Ask before tool actions',
+    icon: ShieldCheck,
+  },
+  {
+    label: 'Auto accept edits',
+    value: 'auto',
+    description: 'Auto-approve safe file operations',
+    icon: Code,
+  },
+  {
+    label: 'Plan mode',
+    value: 'plan',
+    description: 'Block all tool execution',
+    icon: FileText,
+  },
+  {
+    label: 'Bypass permissions',
+    value: 'bypass',
+    description: 'Skip all approval checks',
+    icon: AlertTriangle,
+    cautionary: true,
+  },
 ];
 
-const STORAGE_KEY = 'zuberi:exec-mode';
-
 type ModeSelectorProps = {
-  send: (msg: WebSocketMessage) => void;
-  sessionKey: string;
+  mode: PermissionMode;
+  onModeChange: (mode: PermissionMode) => void;
 };
 
-export function ModeSelector({ send, sessionKey }: ModeSelectorProps) {
-  const [selectedMode, setSelectedMode] = useState<string>(() => {
-    return localStorage.getItem(STORAGE_KEY) || 'off';
-  });
+export function ModeSelector({ mode, onModeChange }: ModeSelectorProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPos, setMenuPos] = useState<{ bottom: number; left: number }>({ bottom: 0, left: 0 });
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -66,23 +88,13 @@ export function ModeSelector({ send, sessionKey }: ModeSelectorProps) {
     };
   }, [menuOpen, closeMenu]);
 
-  const handleSelect = useCallback((value: string) => {
-    setSelectedMode(value);
-    localStorage.setItem(STORAGE_KEY, value);
+  const handleSelect = useCallback((value: PermissionMode) => {
     closeMenu();
+    onModeChange(value);
+  }, [closeMenu, onModeChange]);
 
-    send({
-      type: 'req',
-      id: crypto.randomUUID(),
-      method: 'sessions.patch',
-      params: {
-        key: sessionKey,
-        execAsk: value,
-      },
-    });
-  }, [send, sessionKey, closeMenu]);
-
-  const selectedLabel = MODE_OPTIONS.find((o) => o.value === selectedMode)?.label ?? 'Auto accept edits';
+  const selected = MODE_OPTIONS.find((o) => o.value === mode) ?? MODE_OPTIONS[0];
+  const SelectedIcon = selected.icon;
 
   return (
     <div className="relative flex items-center">
@@ -90,10 +102,11 @@ export function ModeSelector({ send, sessionKey }: ModeSelectorProps) {
         ref={btnRef}
         type="button"
         onClick={toggleMenu}
-        className="flex h-7 items-center gap-1 border px-1.5 text-xs outline-none"
-        style={{ width: 150, cursor: 'pointer', background: 'var(--surface-2)', borderColor: 'var(--border-interactive)', color: 'var(--text-secondary)' }}
+        className="flex h-7 items-center gap-1.5 border px-2 text-xs outline-none"
+        style={{ width: 170, cursor: 'pointer', background: 'var(--surface-2)', borderColor: 'var(--border-interactive)', color: 'var(--text-secondary)' }}
       >
-        <span className="flex-1 truncate text-left">{selectedLabel}</span>
+        <SelectedIcon size={12} style={{ flexShrink: 0, opacity: 0.7 }} />
+        <span className="flex-1 truncate text-left">{selected.label}</span>
         <ChevronDown size={10} style={{ opacity: 0.5, flexShrink: 0 }} />
       </button>
 
@@ -107,25 +120,40 @@ export function ModeSelector({ send, sessionKey }: ModeSelectorProps) {
             bottom: menuPos.bottom,
             left: menuPos.left,
             zIndex: 10001,
+            minWidth: 240,
           }}
         >
-          {MODE_OPTIONS.map((opt) => (
-            <div
-              key={opt.value}
-              className="ctx-menu-item"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleSelect(opt.value);
-              }}
-            >
-              <span>{opt.label}</span>
-              {opt.value === selectedMode && (
-                <span style={{ marginLeft: 'auto', paddingLeft: 12, color: 'var(--ember)', fontSize: 11 }}>
-                  &#x25CF;
-                </span>
-              )}
-            </div>
-          ))}
+          {MODE_OPTIONS.map((opt) => {
+            const Icon = opt.icon;
+            return (
+              <div
+                key={opt.value}
+                className="ctx-menu-item"
+                style={{ padding: '8px 14px', alignItems: 'flex-start' }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleSelect(opt.value);
+                }}
+              >
+                <Icon size={14} style={{ flexShrink: 0, marginTop: 2, opacity: 0.7 }} />
+                <div style={{ marginLeft: 10, flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>{opt.label}</div>
+                  <div style={{
+                    fontSize: 11,
+                    color: opt.cautionary ? 'var(--status-danger)' : 'var(--text-muted)',
+                    marginTop: 1,
+                  }}>
+                    {opt.description}
+                  </div>
+                </div>
+                {opt.value === mode && (
+                  <span style={{ marginLeft: 8, paddingTop: 2, color: 'var(--ember)', fontSize: 11, flexShrink: 0 }}>
+                    &#x2713;
+                  </span>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

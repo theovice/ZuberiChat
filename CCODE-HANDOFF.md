@@ -2,9 +2,10 @@
 
 **Updated:** 2026-03-08
 **Repo:** C:\Users\PLUTO\github\Repo\ZuberiChat
-**Installed version:** 0.1.2
-**Repo version:** 0.1.2
-**Smoke tests:** 13/13 (run `pnpm test` to verify)
+**Installed version:** 0.1.1 (freshly installed from NSIS build)
+**Repo version:** 0.1.1
+**Smoke tests:** 116/116 (run `pnpm test` to verify)
+**Pushed to remote:** Yes — `origin/main` is up to date with local `main`
 
 ## Current Sidebar State
 
@@ -29,6 +30,7 @@ About Zuberi text: `Zuberi v0.1.1\nWahwearro Holdings LLC`
 - Model selector auto-refresh gated on `handshakeComplete` (line 418 of ClawdChatInterface.tsx) — expected, not a bug
 - Clicking model selector dropdown bypasses gate via `onOpen` -> `fetchModels()` and fetches from Ollama directly
 - Model selector button `disabled` condition is `isLoading` only — do NOT re-add `models.length === 0` (causes chicken-and-egg)
+- ModeSelector.tsx and ModelSelector.tsx dropdowns use bottom-anchor CSS positioning (`bottom: distFromBottom`) — always opens upward regardless of window size. Do NOT switch back to `top` + `translateY(-100%)` (breaks in non-fullscreen windows)
 - `fetchModels()` calls `http://localhost:11434/api/tags` — plain GET, no headers
 - `sandbox.docker.network` must stay `"none"` — `"host"` crashes compose stack
 - Never start ccode sessions by assuming installed app matches repo — always check git log
@@ -137,10 +139,14 @@ The app renders at `localhost:3000` in a plain browser (no Tauri) using the offi
 | `src/components/layout/Sidebar.tsx` | 3 items: New chat, Settings, Kanban Board + clickable update indicator |
 | `src/components/layout/Titlebar.tsx` | Window controls, sidebar toggle, UsageMeter, clickable amber dot, keyboard shortcuts |
 | `src/components/layout/ZuberiContextMenu.tsx` | Right-click menu: File, Kanban, Edit, View, Help (About Zuberi) |
+| `src/types/permissions.ts` | Permission mode types, approval record definitions, mode-to-execAsk mapping |
+| `src/lib/permissionPolicy.ts` | Approval request normalization and auto-resolution policy engine |
+| `src/components/chat/ModeSelector.tsx` | Controlled permission mode dropdown (4 modes, icons, descriptions, upward-opening) |
 | `src/components/chat/ModelSelector.tsx` | Dropdown model picker, fetches from Ollama, preloads to GPU |
 | `src/components/chat/ClawdChatInterface.tsx` | Main chat component, WebSocket to OpenClaw, fetchModels, drag-drop |
 | `src/App.tsx` | Root component, sidebar state, version poller, Titlebar + Sidebar + ClawdChatInterface |
 | `src/test/smoke.test.tsx` | 13 smoke tests |
+| `src/test/permissions.test.tsx` | 103 permission tests (normalization, classification, policy, ModeSelector component) |
 | `package.json` | Version 0.1.1, key deps: tauri-apps/api, react 19, vite 6, vitest 4 |
 | `scripts/verify-build.ps1` | Post-build binary verification (checks CSP strings embedded in exe) |
 | `.openclaw.local.json` | Gateway token for OpenClaw WebSocket (repo root, copied to USERPROFILE for prod) |
@@ -148,11 +154,11 @@ The app renders at `localhost:3000` in a plain browser (no Tauri) using the offi
 ## Last 5 Commits
 
 ```
+6464ab6 UI polish: remove gear icon, square input corners, upward dropdowns, color token discipline
+7eab821 Add browser-safe preview mode for UI development
 1abd3c2 RTL-034: Force Cargo to re-embed BUILD_COMMIT on every new commit
 e6a153a RTL-034: Fix post-install version metadata sync
 7a1cb2c RTL-034: Fix update script stderr handling
-17a28de Update CCODE-HANDOFF.md with RTL-034 fix commit hash
-03d568b RTL-034: Fix update execution path after OK click
 ```
 
 ## Do Not Touch
@@ -165,7 +171,7 @@ e6a153a RTL-034: Fix post-install version metadata sync
 
 ## Pre-flight Checklist (run before any task)
 
-1. `pnpm test` — must be 13/13
+1. `pnpm test` — must be 116/116
 2. Kill any running `pnpm tauri dev` process
 3. Read this file
 4. Check `git log --oneline -3` to confirm repo state
@@ -209,10 +215,63 @@ e6a153a RTL-034: Fix post-install version metadata sync
 - Titlebar close button red `#e81123`/`#c50f1f` (Windows convention)
 - Kanban panel scoped CSS variables (isolated design system)
 
-## Last Task Completed
+## RTL-047 Phase 1: Functional Permission Selector with Approval Handling
 
-RTL-046 UI Polish: Tightened color token discipline across 8 files. Added 10 semantic tokens and 3 CSS classes to globals.css. Replaced ~30 hardcoded color values with token references. Send button restyled from coral to warm forged metal. No layout/spacing/typography changes. 13/13 tests pass.
+**What was built:**
+ModeSelector is now a functional permission selector connected to OpenClaw's exec-approval protocol. Phase 1 covers mode mapping, auto-resolution, and approval event handling. Phase 2 (later) will add the ToolApprovalCard UI for pending approvals with user interaction.
+
+**4 permission modes:**
+
+| UI Label | Frontend value | Backend execAsk | Frontend behavior |
+|----------|---------------|-----------------|-------------------|
+| Ask permissions | `ask` | `on-miss` | Show approval cards, user decides |
+| Auto accept edits | `auto` | `on-miss` | Auto-allow-once read/write/patch, ask for destructive/exec |
+| Plan mode | `plan` | `always` | Auto-deny all approvals |
+| Bypass permissions | `bypass` | `off` | No approvals requested by backend |
+
+Note: "Auto accept edits" and "Ask permissions" send the SAME `execAsk` (`on-miss`) to backend. The difference is frontend-only: auto mode resolves safe approvals automatically.
+
+**New files:**
+- `src/types/permissions.ts` — PermissionMode, ApprovalRecord, ApprovalStatus, PERMISSION_MODE_TO_EXEC_ASK mapping
+- `src/lib/permissionPolicy.ts` — normalizeApprovalRequest() command classifier + resolveApprovalDecision() policy engine
+- `src/test/permissions.test.tsx` — 103 tests (normalization, category classification, policy matrix, ModeSelector component)
+
+**Modified files:**
+- `src/components/chat/ModeSelector.tsx` — Rewritten as controlled component (props: `mode`, `onModeChange`). 4 modes with Lucide icons (ShieldCheck, Code, FileText, AlertTriangle). Bypass description in `--status-danger` color. Checkmark on selected mode.
+- `src/components/chat/ClawdChatInterface.tsx` — Added permissionMode state (localStorage persisted), permissionModeRef, approval event handlers (exec.approval.requested/resolved), auto-resolution via policy engine, 120s timeout tracking, sessions.patch RPC on mode change
+
+**Architecture decisions:**
+- ModeSelector is purely presentational — parent (ClawdChatInterface) owns all state and RPC
+- `permissionModeRef` used for stable access in WS callbacks without stale closures
+- Approvals stored in `approvalsRef` (Map<string, ApprovalRecord>) — not in React state (no UI yet for Phase 1)
+- Timeout timers tracked in `approvalTimersRef` for cleanup on resolution
+- Auto-resolved approvals send `exec.approval.resolve` RPC immediately via `sendRef.current`
+- Pending approvals (ask mode) set up setTimeout → mark 'expired' after 120s
+
+**OpenClaw protocol facts (discovered during RTL-047):**
+- OpenClaw source at `C:\Users\PLUTO\github\openclaw\` (TypeScript/Node.js monorepo)
+- `exec-approval.ts` — full approval protocol, 10K+ lines
+- Events: `exec.approval.requested` (server→client), `exec.approval.resolved` (server→client)
+- RPC: `exec.approval.resolve` with decisions: `allow-once` | `allow-always` | `deny`
+- `execAsk` session field: `"off"` | `"on-miss"` | `"always"` — set via `sessions.patch`, invalid values rejected
+- Backend-enforced execution — frontend cannot block, only approve/deny when asked
+- Zuberi already has `operator.approvals` scope (line 42 of ClawdChatInterface.tsx)
+- No native "plan mode" in OpenClaw — achieved via `execAsk: "always"` + frontend auto-deny
+
+**Phase 2 TODO:**
+- ToolApprovalCard UI component for pending approvals in ask mode
+- User interaction (approve/deny buttons) with visual feedback
+- Integration with message stream (show approval cards inline)
+
+## Last Session Summary
+
+Session completed the following work (in order):
+1. **RTL-047 Phase 1: Functional Permission Selector** — Built complete permission system: types, policy engine, controlled ModeSelector, approval event handling with auto-resolution, 120s timeout, localStorage persistence, sessions.patch RPC
+2. **103 new tests** — Normalization, command classification (60+ commands), policy matrix (all 4 modes × 6 categories), ModeSelector component rendering and interaction
+3. **Browser preview verified** — All 4 modes render with correct icons, descriptions, and danger color on bypass
+
+All 116/116 tests passing (13 smoke + 103 permissions).
 
 ## Next Task
 
-None queued.
+RTL-047 Phase 2: ToolApprovalCard UI for pending approvals with user interaction.
