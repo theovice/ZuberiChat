@@ -78,7 +78,7 @@ export function Sidebar({ open, updateAvailable = false, availableVersion = null
             style={{
               padding: '6px 12px',
               fontSize: 11,
-              color: updating ? 'var(--text-muted)' : '#f0a500',
+              color: updating ? 'var(--text-muted)' : 'var(--ember)',
               marginTop: 4,
               background: 'none',
               border: 'none',

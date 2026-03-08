@@ -1,7 +1,7 @@
 import { FormEvent, KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { ArrowUp, Monitor, Cpu } from 'lucide-react';
+import { ArrowUp, Cpu } from 'lucide-react';
 import { useWebSocket, type WebSocketMessage } from '@/hooks/useWebSocket';
 import { ConnectionStatus } from '@/components/chat/ConnectionStatus';
 import { ModelSelector } from '@/components/chat/ModelSelector';
@@ -730,11 +730,11 @@ export function ClawdChatInterface() {
             alignItems: 'center',
             justifyContent: 'center',
             background: 'rgba(14, 13, 12, 0.88)',
-            border: '2px dashed #f0a020',
+            border: '2px dashed var(--ember)',
             pointerEvents: 'none',
           }}
         >
-          <span style={{ color: '#f0a020', fontSize: 16, fontWeight: 500 }}>
+          <span style={{ color: 'var(--ember)', fontSize: 16, fontWeight: 500 }}>
             Drop files here to add to chat
           </span>
         </div>
@@ -755,7 +755,7 @@ export function ClawdChatInterface() {
               key={message.id}
               style={{
                 textAlign: message.role === 'user' ? 'right' : 'left',
-                color: message.role === 'user' ? '#f0a020' : '#eae9e9',
+                color: message.role === 'user' ? 'var(--ember)' : 'var(--text-primary)',
                 fontSize: '0.9rem',
                 lineHeight: 1.6,
                 maxWidth: '85%',
@@ -778,15 +778,14 @@ export function ClawdChatInterface() {
         <div className="mx-auto max-w-3xl">
           {/* Unified input + toolbar container — single rounded box */}
           <div
-            data-rounded
             className="overflow-hidden border"
             style={{
-              borderColor: '#3a3938',
+              borderColor: 'var(--surface-interactive)',
               transition: 'border-color 150ms',
             }}
           >
             {/* Row 1 — Input field + send button */}
-            <div className="relative bg-[#2b2a28]" style={{ padding: '12px 14px 8px' }}>
+            <div className="relative bg-[var(--surface-2)]" style={{ padding: '12px 14px 8px' }}>
               {/* File chips (above the textarea when files are queued) */}
               <FileChips files={queuedFiles} onRemove={removeFile} />
 
@@ -799,7 +798,7 @@ export function ClawdChatInterface() {
                   onPaste={handlePaste}
                   rows={1}
                   placeholder="Reply..."
-                  className="flex-1 resize-none border-none bg-transparent text-sm text-[#e6dbcb] placeholder:text-[#7a7977] outline-none focus:ring-0 focus-visible:ring-0"
+                  className="chat-input flex-1 resize-none border-none bg-transparent text-sm outline-none focus:ring-0 focus-visible:ring-0"
                   style={{ minHeight: '22px', maxHeight: '132px', lineHeight: '22px', userSelect: 'text' }}
                 />
                 {/* Send button — coral circle, inside input row */}
@@ -809,7 +808,7 @@ export function ClawdChatInterface() {
                   aria-label="Send"
                   className="btn-circle mb-px flex h-7 w-7 shrink-0 items-center justify-center transition-colors disabled:opacity-30"
                   style={{
-                    backgroundColor: (!draft.trim() && queuedFiles.length === 0) ? '#4a4947' : '#D9654B',
+                    backgroundColor: (!draft.trim() && queuedFiles.length === 0) ? 'var(--surface-interactive-hover)' : 'var(--send-bg)',
                   }}
                 >
                   <ArrowUp size={14} color="#ffffff" />
@@ -820,8 +819,8 @@ export function ClawdChatInterface() {
 
             {/* Row 2 — Controls toolbar, visually connected */}
             <div
-              className="flex items-center gap-2 bg-[#2b2a28] px-3 py-1.5"
-              style={{ borderTop: '1px solid #3a3938' }}
+              className="flex items-center gap-2 bg-[var(--surface-2)] px-3 py-1.5"
+              style={{ borderTop: '1px solid var(--surface-interactive)' }}
             >
               <AttachButton onFiles={processFiles} />
               <ModeSelector send={send} sessionKey={SESSION_KEY} />
@@ -841,15 +840,11 @@ export function ClawdChatInterface() {
             </div>
           </div>
 
-          {/* Status bar — working directory + GPU model */}
-          <div className="mt-1 flex items-center justify-between px-1" style={{ fontSize: 10, color: '#666564' }}>
+          {/* Status bar — GPU model */}
+          <div className="mt-1 flex items-center justify-end px-1" style={{ fontSize: 10, color: 'var(--text-muted)' }}>
             <div className="flex items-center gap-1">
-              <Monitor size={10} className="shrink-0 text-[#666564]" />
-              <span className="truncate" style={{ maxWidth: 300 }}>C:\</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <Cpu size={10} className={gpuModel ? 'text-[#4ade80]' : 'text-[#666564]'} />
-              <span style={{ color: gpuModel ? '#4ade80' : '#666564' }}>
+              <Cpu size={10} style={{ color: gpuModel ? 'var(--status-success)' : 'var(--text-muted)' }} />
+              <span style={{ color: gpuModel ? 'var(--status-success)' : 'var(--text-muted)' }}>
                 {gpuModel ?? 'no model'}
               </span>
             </div>

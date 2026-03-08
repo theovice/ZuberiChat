@@ -32,7 +32,7 @@ type ModelSelectorProps = {
 export function ModelSelector({ send, isConnected, sessionKey, models, onClearGpu, onOpen, onModelLoaded, ollamaDown, onRetryOllama }: ModelSelectorProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [menuPos, setMenuPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+  const [menuPos, setMenuPos] = useState<{ bottom: number; left: number }>({ bottom: 0, left: 0 });
   const [selectedModel, setSelectedModel] = useState<string>(() => {
     return localStorage.getItem(STORAGE_KEY) || '';
   });
@@ -61,8 +61,9 @@ export function ModelSelector({ send, isConnected, sessionKey, models, onClearGp
         onOpen?.(); // trigger model list refresh
         if (btnRef.current) {
           const rect = btnRef.current.getBoundingClientRect();
-          // Position: right-aligned, opens upward
-          setMenuPos({ top: rect.top, left: rect.right });
+          // Use bottom anchoring so menu always grows upward
+          const distFromBottom = window.innerHeight - rect.top;
+          setMenuPos({ bottom: distFromBottom + 6, left: rect.right });
         }
       }
       return !prev;
@@ -143,7 +144,7 @@ export function ModelSelector({ send, isConnected, sessionKey, models, onClearGp
         style={{
           width: 150,
           background: 'var(--surface-1)',
-          borderColor: isLoading ? '#f0a020' : 'var(--border-medium)',
+          borderColor: isLoading ? 'var(--ember)' : 'var(--border-medium)',
           color: 'var(--text-secondary)',
           cursor: isLoading ? 'default' : 'pointer',
         }}
@@ -153,7 +154,7 @@ export function ModelSelector({ send, isConnected, sessionKey, models, onClearGp
         {isLoading && (
           <span
             className="text-[10px]"
-            style={{ color: '#f0a020', flexShrink: 0 }}
+            style={{ color: 'var(--ember)', flexShrink: 0 }}
             title="Loading model into GPU..."
           >
             &#x27F3;
@@ -168,15 +169,15 @@ export function ModelSelector({ send, isConnected, sessionKey, models, onClearGp
           className="ctx-menu"
           style={{
             position: 'fixed',
-            top: menuPos.top,
+            bottom: menuPos.bottom,
             left: menuPos.left,
-            transform: 'translateY(-100%) translateX(-100%) translateY(-6px)',
+            transform: 'translateX(-100%)',
             zIndex: 10001,
           }}
         >
           {models.length === 0 && ollamaDown && (
             <div style={{ padding: '8px 12px' }}>
-              <div style={{ color: '#c03030', fontSize: 11, marginBottom: 6 }}>
+              <div style={{ color: 'var(--status-danger)', fontSize: 11, marginBottom: 6 }}>
                 Ollama is not running
               </div>
               <div style={{ color: 'var(--text-muted)', fontSize: 10, marginBottom: 6 }}>
@@ -191,9 +192,9 @@ export function ModelSelector({ send, isConnected, sessionKey, models, onClearGp
                     onRetryOllama?.();
                   }}
                   style={{
-                    background: '#3a3938',
-                    border: '1px solid #4a4947',
-                    color: '#f0a020',
+                    background: 'var(--surface-interactive)',
+                    border: '1px solid var(--border-interactive)',
+                    color: 'var(--ember)',
                     fontSize: 11,
                     padding: '3px 10px',
                     cursor: 'pointer',
@@ -208,7 +209,7 @@ export function ModelSelector({ send, isConnected, sessionKey, models, onClearGp
                     closeMenu();
                     onRetryOllama?.();
                   }}
-                  style={{ color: '#f0a020', fontSize: 11, cursor: 'pointer', textDecoration: 'underline' }}
+                  style={{ color: 'var(--ember)', fontSize: 11, cursor: 'pointer', textDecoration: 'underline' }}
                 >
                   Retry
                 </span>

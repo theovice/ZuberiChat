@@ -30,7 +30,23 @@
   --text-secondary: #b0afae;
   --text-muted: #666564;
   --text-ember: #f0c060;
+  --text-placeholder: #7a7977;
   --accent-primary: #e6dbcb;
+
+  /* ── Interactive Surfaces ── */
+  --surface-interactive: #3a3938;
+  --surface-interactive-hover: #4a4947;
+  --surface-interactive-disabled: #2e2c2a;
+  --border-interactive: #4a4947;
+
+  /* ── Status ── */
+  --status-success: #4ade80;
+  --status-warning: #f0a020;
+  --status-danger: #c03030;
+
+  /* ── Send Button (warm forged metal) ── */
+  --send-bg: #b87a3a;
+  --send-bg-hover: #c8863f;
 
   /* ── Borders ── */
   --border-subtle: rgba(255, 255, 255, 0.06);
@@ -564,6 +580,31 @@ input, textarea, [contenteditable="true"] {
 /* ── Rounded corners opt-in ──────────────────────────────── */
 [data-rounded] {
   border-radius: 12px !important;
+}
+
+/* ── Attach button ─────────────────────────────────────────── */
+.attach-btn {
+  color: var(--text-secondary);
+}
+.attach-btn:hover {
+  background: var(--surface-interactive);
+  color: var(--accent-primary);
+}
+
+/* ── File chip remove button ───────────────────────────────── */
+.file-chip-remove {
+  color: var(--text-muted);
+}
+.file-chip-remove:hover {
+  color: var(--accent-primary);
+}
+
+/* ── Chat input ────────────────────────────────────────────── */
+.chat-input {
+  color: var(--accent-primary);
+}
+.chat-input::placeholder {
+  color: var(--text-placeholder);
 }
 
 /* ── Circular button opt-in ──────────────────────────────── */

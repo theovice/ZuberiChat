@@ -73,7 +73,7 @@ export function AttachButton({ onFiles }: AttachButtonProps) {
         onClick={handleClick}
         aria-label="Attach files"
         title="Attach files"
-        className="flex items-center justify-center rounded-md text-[#b0afae] transition-colors hover:bg-[#3a3938] hover:text-[#e6dbcb]"
+        className="attach-btn flex items-center justify-center rounded-md transition-colors"
         style={{ width: 28, height: 28 }}
       >
         <Plus size={18} />
@@ -101,10 +101,12 @@ export function FileChips({ files, onRemove }: FileChipsProps) {
       {files.map((f) => (
         <div
           key={f.id}
-          className="flex items-center gap-1.5 rounded bg-[#3a3938] text-xs text-[#d5cbbd]"
+          className="flex items-center gap-1.5 rounded text-xs"
           style={{
             padding: '4px 8px',
             maxWidth: 200,
+            background: 'var(--surface-interactive)',
+            color: 'var(--accent-primary)',
             opacity: f.status === 'error' ? 0.5 : 1,
           }}
         >
@@ -117,14 +119,14 @@ export function FileChips({ files, onRemove }: FileChipsProps) {
             {f.name}
           </span>
           {f.status === 'uploading' && (
-            <span className="text-[#f0a020]" style={{ fontSize: '0.65rem' }}>
+            <span style={{ fontSize: '0.65rem', color: 'var(--ember)' }}>
               ...
             </span>
           )}
           <button
             type="button"
             onClick={() => onRemove(f.id)}
-            className="ml-0.5 text-[#8a8887] transition-colors hover:text-[#e6dbcb]"
+            className="file-chip-remove ml-0.5 transition-colors"
             aria-label={`Remove ${f.name}`}
           >
             <X size={12} />

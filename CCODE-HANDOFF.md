@@ -172,9 +172,46 @@ e6a153a RTL-034: Fix post-install version metadata sync
 5. Check `git status` for uncommitted changes
 6. After `pnpm tauri build`, run `scripts\verify-build.ps1` before installing. If any check fails, do not install — fix and rebuild first.
 
+## RTL-046 Color Token Polish
+
+**What was cleaned up:**
+- Sidebar update amber `#f0a500` → `var(--ember)` (was drifting from canonical `#f0a020`)
+- Send button coral `#D9654B` → `var(--send-bg)` `#b87a3a` (warm forged metal, fits ember/obsidian)
+- GPU status cool gray `#6b7280` → `var(--text-muted)`, green `#4ade80` → `var(--status-success)`
+- Input text `#e6dbcb` → `var(--accent-primary)`, placeholder `#7a7977` → `var(--text-placeholder)`
+- Input container bg `#2b2a28` → `var(--surface-2)`, borders `#3a3938` → `var(--surface-interactive)`
+- ModeSelector hardcoded `#4a4947`/`#2b2a28`/`#b0afae` → tokens
+- ModelSelector `#f0a020` hardcodes → `var(--ember)`, `#c03030` → `var(--status-danger)`, retry button `#3a3938`/`#4a4947` → interactive surface tokens
+- FileAttachments chip bg `#3a3938` → `var(--surface-interactive)`, text `#d5cbbd` → `var(--accent-primary)`, upload indicator `#f0a020` → `var(--ember)`, remove button and attach button colors → token-based CSS classes
+- Message colors `#f0a020`/`#eae9e9` → `var(--ember)`/`var(--text-primary)`
+- Drag overlay ember hardcodes → `var(--ember)`
+
+**New semantic tokens added to `:root`:**
+- `--text-placeholder: #7a7977`
+- `--surface-interactive: #3a3938`
+- `--surface-interactive-hover: #4a4947`
+- `--surface-interactive-disabled: #2e2c2a`
+- `--border-interactive: #4a4947`
+- `--status-success: #4ade80`
+- `--status-warning: #f0a020`
+- `--status-danger: #c03030`
+- `--send-bg: #b87a3a`
+- `--send-bg-hover: #c8863f`
+
+**New CSS classes in globals.css:**
+- `.attach-btn` / `.attach-btn:hover` — attach button color states
+- `.file-chip-remove` / `.file-chip-remove:hover` — file chip X button
+- `.chat-input` / `.chat-input::placeholder` — input text + placeholder
+
+**Intentionally left bespoke:**
+- ConnectionStatus diamond SVG facet colors (illustration-specific, not UI chrome)
+- UsageMeter gauge colors (functional dashboard palette: green/amber/red thresholds)
+- Titlebar close button red `#e81123`/`#c50f1f` (Windows convention)
+- Kanban panel scoped CSS variables (isolated design system)
+
 ## Last Task Completed
 
-Browser-safe preview mode: Added `src/lib/platform.ts` and modified `src/main.tsx` to install Tauri IPC mocks when running in a plain browser. Uses `@tauri-apps/api/mocks` (`mockIPC` + `mockWindows`) to patch `window.__TAURI_INTERNALS__` before React mounts. All 8 files that import Tauri APIs work unmodified. 13/13 smoke tests pass. UI renders fully at localhost:3000 via `preview_start browser-preview`.
+RTL-046 UI Polish: Tightened color token discipline across 8 files. Added 10 semantic tokens and 3 CSS classes to globals.css. Replaced ~30 hardcoded color values with token references. Send button restyled from coral to warm forged metal. No layout/spacing/typography changes. 13/13 tests pass.
 
 ## Next Task
 

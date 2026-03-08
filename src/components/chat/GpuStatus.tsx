@@ -44,10 +44,10 @@ export function GpuStatus() {
   }, []);
 
   return (
-    <div className="flex items-center gap-1.5 text-[10px] text-[#807e7c]">
+    <div className="flex items-center gap-1.5 text-[10px]" style={{ color: 'var(--text-muted)' }}>
       <span
         className="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
-        style={{ backgroundColor: gpu.modelName ? '#4ade80' : '#6b7280' }}
+        style={{ backgroundColor: gpu.modelName ? 'var(--status-success)' : 'var(--text-muted)' }}
       />
       <span className="truncate whitespace-nowrap">
         {gpu.modelName
