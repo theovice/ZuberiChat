@@ -28,6 +28,23 @@ fn main() {
         .unwrap_or_else(|| "unknown".to_string());
     println!("cargo:rustc-env=BUILD_COMMIT={}", commit);
 
+    // Force Cargo to re-run build script when HEAD moves (new commit or branch switch).
+    // Without this, Cargo caches the old BUILD_COMMIT when only non-Rust files change.
+    let git_head = std::path::Path::new("../.git/HEAD");
+    if git_head.exists() {
+        println!("cargo:rerun-if-changed=../.git/HEAD");
+        // HEAD contains "ref: refs/heads/<branch>" — watch that ref file too
+        if let Ok(head_content) = std::fs::read_to_string(git_head) {
+            let head_content = head_content.trim();
+            if let Some(ref_path) = head_content.strip_prefix("ref: ") {
+                let ref_file = format!("../.git/{}", ref_path);
+                if std::path::Path::new(&ref_file).exists() {
+                    println!("cargo:rerun-if-changed={}", ref_file);
+                }
+            }
+        }
+    }
+
     // Embed UTC build timestamp at compile time
     let timestamp = chrono_free_utc_now();
     println!("cargo:rustc-env=BUILD_TIMESTAMP={}", timestamp);
