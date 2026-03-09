@@ -671,7 +671,9 @@ Data and logic corrections to Model Matrix. No ZuberiChat source files touched.
 - Models: 33 (unchanged)
 - File size: 40,654 → 44,177 bytes
 
-## RTL-051: Model Stack Upgrade + Native Ollama API Switch (2026-03-09)
+## RTL-052: Model Stack Upgrade + Native Ollama API Switch (2026-03-09)
+
+> **RTL numbering note:** This was originally mislabeled RTL-051 in the commit message (`45f624f`). RTL-051 was already assigned to sentinel output filtering above. Correct designation is **RTL-052**.
 
 Upgraded Zuberi's model stack for RTX 5070 Ti 16GB and switched OpenClaw from OpenAI-compatible API to native Ollama API for reliable tool calling.
 
@@ -705,6 +707,54 @@ Upgraded Zuberi's model stack for RTX 5070 Ti 16GB and switched OpenClaw from Op
 - ✅ Gateway container restarted and healthy
 - ✅ Config verified inside container (no /v1, api: ollama, 3 models, 131072 context)
 - ✅ Smoke test: gemma3:12b responded correctly
+
+## RTL-052 Post-Upgrade Cleanup: Model Awareness Updates (2026-03-09)
+
+Post model stack upgrade cleanup. No ZuberiChat source files touched.
+
+**model-router skill updated:**
+- `C:\Users\PLUTO\openclaw_workspace\skills\model-router\SKILL.md` — Replaced qwen3 stack with gemma3:12b (primary+vision), gpt-oss:20b (reasoning), qwen2.5-coder:14b (coding). Updated decision rules, delegation examples, GPU behavior. Vision now handled natively by gemma3:12b instead of separate qwen3-vl model.
+
+**TOOLS.md updated:**
+- `C:\Users\PLUTO\openclaw_workspace\TOOLS.md` — Version 0.8.6 → 0.8.7. Model Inventory table updated to new 3-model stack with 128K context. Vision Tool section updated from qwen3-vl:8b-fast to gemma3:12b. Version history entry added.
+
+**CXDB capability records written (context 8):**
+| turn_id | Model | Description |
+|---------|-------|-------------|
+| 20 | gemma3:12b | Primary general + multimodal model |
+| 21 | gpt-oss:20b | Heavy reasoning + tool-use model |
+| 22 | qwen2.5-coder:14b | Dedicated coding model |
+
+**Superseded CXDB records (NOT deleted — CXDB is append-only):**
+- turn_id 10: Permission Selector (RTL-047) — still valid, not model-specific
+- turn_id 11: Markdown Rendering (RTL-048) — still valid
+- turn_id 12: One-Click Update (RTL-034) — still valid
+- turn_id 13: CEG-Ccode Dispatch — still valid
+- turn_id 14: AgenticMail — still valid
+- turn_id 15: n8n Proof Workflow — still valid
+- turn_id 16: n8n AI Audit Intake — still valid
+- turn_id 17: Browser Preview (ccode) — still valid
+- turn_id 18: Sentinel Filtering (RTL-051) — still valid
+- turn_id 19: Copy Button + Alignment (v1.0.1) — still valid
+
+The new records (20-22) do not invalidate any existing records — they add model-specific capability awareness for the new stack. The older qwen3-specific model references in previous records are now historically accurate but no longer reflect the active model configuration.
+
+## Old qwen3 Models Removed (2026-03-09)
+
+Removed 4 old qwen3 models from Ollama on KILO. ~30.8 GB disk reclaimed.
+
+| Model | Size | Status |
+|-------|------|--------|
+| qwen3:14b-fast | 9.3 GB | ✅ Removed |
+| qwen3:14b | 9.3 GB | ✅ Removed |
+| qwen3-vl:8b-fast | 6.1 GB | ✅ Removed |
+| qwen3-vl:8b | 6.1 GB | ✅ Removed |
+
+**Final Ollama stack:** gemma3:12b (8.1 GB), gpt-oss:20b (13 GB), qwen2.5-coder:14b (9.0 GB) — 3 models only.
+
+## v1.0.2 — Model Stack Upgrade (2026-03-09)
+
+Version bumped 1.0.1 → 1.0.2 to mark the model stack upgrade as a release milestone. No code changes — version bump only.
 
 ## Next Task
 
