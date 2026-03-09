@@ -6,21 +6,15 @@ import { useWebSocket, type WebSocketMessage } from '@/hooks/useWebSocket';
 import { ConnectionStatus } from '@/components/chat/ConnectionStatus';
 import { ModelSelector } from '@/components/chat/ModelSelector';
 import { ModeSelector } from '@/components/chat/ModeSelector';
+import { MessageContent } from '@/components/chat/MessageContent';
 // GpuStatus removed from toolbar — component kept for future use
 import { ZuberiContextMenu } from '@/components/layout/ZuberiContextMenu';
 import { AttachButton, FileChips, type QueuedFile } from '@/components/chat/FileAttachments';
 import { ensureEnvironment } from '@/lib/ollama';
+import type { ContentBlock, ChatMessage } from '@/types/message';
 import type { ApprovalRecord, ApprovalStatus, PermissionMode } from '@/types/permissions';
 import { PERMISSION_MODE_TO_EXEC_ASK } from '@/types/permissions';
 import { normalizeApprovalRequest, resolveApprovalDecision } from '@/lib/permissionPolicy';
-
-type ChatRole = 'user' | 'assistant';
-
-type ChatMessage = {
-  id: string;
-  role: ChatRole;
-  content: string;
-};
 
 const SESSION_KEY = 'agent:main:main';
 
@@ -96,6 +90,68 @@ function extractTextFromMessage(message: unknown): string | null {
   }
 
   return null;
+}
+
+/**
+ * Extract structured content blocks from an OpenClaw message.
+ * Returns undefined if the message doesn't contain a structured content array.
+ * Preserves toolCall/toolResult blocks instead of flattening to text.
+ */
+function extractContentBlocks(message: unknown): ContentBlock[] | undefined {
+  if (!message || typeof message !== 'object') return undefined;
+  const m = message as Record<string, unknown>;
+  if (!Array.isArray(m.content)) return undefined;
+
+  const blocks: ContentBlock[] = [];
+  for (const block of m.content) {
+    if (typeof block === 'string') {
+      blocks.push({ type: 'text', text: block });
+      continue;
+    }
+    if (!block || typeof block !== 'object') continue;
+    const b = block as Record<string, unknown>;
+
+    if (b.type === 'text' && typeof b.text === 'string') {
+      blocks.push({ type: 'text', text: b.text });
+    } else if (b.type === 'toolCall' || b.type === 'tool_call') {
+      blocks.push({
+        type: 'toolCall',
+        toolName: typeof b.toolName === 'string'
+          ? b.toolName
+          : typeof b.name === 'string'
+            ? b.name
+            : 'unknown',
+        args: (b.args && typeof b.args === 'object')
+          ? b.args as Record<string, unknown>
+          : (b.input && typeof b.input === 'object')
+            ? b.input as Record<string, unknown>
+            : undefined,
+        id: typeof b.id === 'string' ? b.id : undefined,
+      });
+    } else if (b.type === 'toolResult' || b.type === 'tool_result') {
+      blocks.push({
+        type: 'toolResult',
+        toolName: typeof b.toolName === 'string'
+          ? b.toolName
+          : typeof b.name === 'string'
+            ? b.name
+            : 'unknown',
+        text: typeof b.text === 'string'
+          ? b.text
+          : typeof b.content === 'string'
+            ? b.content
+            : JSON.stringify(b),
+        id: typeof b.id === 'string' ? b.id : undefined,
+      });
+    } else if (typeof b.text === 'string') {
+      // Unknown block type with text — treat as text
+      blocks.push({ type: 'text', text: b.text });
+    }
+  }
+
+  // Only return blocks if we found structured content (not just plain text blocks)
+  const hasStructured = blocks.some((b) => b.type !== 'text');
+  return hasStructured ? blocks : undefined;
 }
 
 export function ClawdChatInterface() {
@@ -337,20 +393,21 @@ export function ClawdChatInterface() {
         } else if (state === 'final') {
           // Replace streaming message with final content if present
           const text = extractTextFromMessage(payload.message);
-          console.info('[WS:FINAL]', { text, streamingId: streamingMessageIdRef.current, rawMessage: JSON.stringify(payload.message ?? null).slice(0, 300) });
+          const blocks = extractContentBlocks(payload.message);
+          console.info('[WS:FINAL]', { text, blocks: blocks?.length, streamingId: streamingMessageIdRef.current, rawMessage: JSON.stringify(payload.message ?? null).slice(0, 300) });
 
           if (text && streamingMessageIdRef.current) {
             const finalStreamId = streamingMessageIdRef.current;
             setMessages((current) =>
               current.map((entry) =>
-                entry.id === finalStreamId ? { ...entry, content: text } : entry,
+                entry.id === finalStreamId ? { ...entry, content: text, blocks } : entry,
               ),
             );
           } else if (text && !streamingMessageIdRef.current) {
             // Non-streaming final (e.g. command responses)
             setMessages((current) => [
               ...current,
-              { id: crypto.randomUUID(), role: 'assistant', content: text },
+              { id: crypto.randomUUID(), role: 'assistant', content: text, blocks },
             ]);
           }
 
@@ -907,11 +964,13 @@ export function ClawdChatInterface() {
                 lineHeight: 1.6,
                 maxWidth: '85%',
                 alignSelf: message.role === 'user' ? 'flex-end' : 'flex-start',
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-word',
               }}
             >
-              {message.content}
+              <MessageContent
+                content={message.content}
+                blocks={message.blocks}
+                role={message.role}
+              />
             </div>
           ))}
         </div>

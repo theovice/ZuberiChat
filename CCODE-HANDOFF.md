@@ -4,7 +4,7 @@
 **Repo:** C:\Users\PLUTO\github\Repo\ZuberiChat
 **Installed version:** 0.1.1 (freshly installed from NSIS build)
 **Repo version:** 0.1.1
-**Smoke tests:** 116/116 (run `pnpm test` to verify)
+**Smoke tests:** 146/146 (run `pnpm test` to verify)
 **Pushed to remote:** Yes — `origin/main` is up to date with local `main`
 
 ## Current Sidebar State
@@ -143,10 +143,16 @@ The app renders at `localhost:3000` in a plain browser (no Tauri) using the offi
 | `src/lib/permissionPolicy.ts` | Approval request normalization and auto-resolution policy engine |
 | `src/components/chat/ModeSelector.tsx` | Controlled permission mode dropdown (4 modes, icons, descriptions, upward-opening) |
 | `src/components/chat/ModelSelector.tsx` | Dropdown model picker, fetches from Ollama, preloads to GPU |
+| `src/components/chat/MessageContent.tsx` | Markdown/structured block renderer (ReactMarkdown + SyntaxHighlighter + block dispatch) |
+| `src/components/chat/ToolCallBlock.tsx` | Collapsible tool call renderer (tool name + expandable args JSON) |
+| `src/components/chat/ToolResultBlock.tsx` | Collapsible tool result renderer (auto-collapses if >5 lines) |
+| `src/types/message.ts` | ContentBlock union type, ChatRole, ChatMessage (structured content protocol) |
+| `src/lib/syntaxTheme.ts` | Custom warm-tinted dark syntax highlighting theme for Prism |
 | `src/components/chat/ClawdChatInterface.tsx` | Main chat component, WebSocket to OpenClaw, fetchModels, drag-drop |
 | `src/App.tsx` | Root component, sidebar state, version poller, Titlebar + Sidebar + ClawdChatInterface |
 | `src/test/smoke.test.tsx` | 13 smoke tests |
 | `src/test/permissions.test.tsx` | 103 permission tests (normalization, classification, policy, ModeSelector component) |
+| `src/test/markdown-render.test.tsx` | 30 markdown/block rendering tests (MessageContent, ToolCallBlock, ToolResultBlock) |
 | `package.json` | Version 0.1.1, key deps: tauri-apps/api, react 19, vite 6, vitest 4 |
 | `scripts/verify-build.ps1` | Post-build binary verification (checks CSP strings embedded in exe) |
 | `.openclaw.local.json` | Gateway token for OpenClaw WebSocket (repo root, copied to USERPROFILE for prod) |
@@ -154,11 +160,11 @@ The app renders at `localhost:3000` in a plain browser (no Tauri) using the offi
 ## Last 5 Commits
 
 ```
+5540b9f RTL-047 Phase 1: Functional permission selector with approval handling
 6464ab6 UI polish: remove gear icon, square input corners, upward dropdowns, color token discipline
 7eab821 Add browser-safe preview mode for UI development
 1abd3c2 RTL-034: Force Cargo to re-embed BUILD_COMMIT on every new commit
 e6a153a RTL-034: Fix post-install version metadata sync
-7a1cb2c RTL-034: Fix update script stderr handling
 ```
 
 ## Do Not Touch
@@ -171,7 +177,7 @@ e6a153a RTL-034: Fix post-install version metadata sync
 
 ## Pre-flight Checklist (run before any task)
 
-1. `pnpm test` — must be 116/116
+1. `pnpm test` — must be 146/146
 2. Kill any running `pnpm tauri dev` process
 3. Read this file
 4. Check `git log --oneline -3` to confirm repo state
@@ -263,14 +269,62 @@ Note: "Auto accept edits" and "Ask permissions" send the SAME `execAsk` (`on-mis
 - User interaction (approve/deny buttons) with visual feedback
 - Integration with message stream (show approval cards inline)
 
+## RTL-048: Markdown Rendering + Structured Block Rendering
+
+**What was built:**
+Assistant messages now render through react-markdown with GFM support and syntax-highlighted code blocks. Structured content blocks (toolCall, toolResult) from OpenClaw protocol render through dedicated collapsible components. User messages remain plain text.
+
+**Rendering architecture:**
+- `MessageContent` (memo'd) dispatches: blocks → `BlockRenderer`, no blocks + assistant → `MarkdownRenderer`, no blocks + user → plain text span
+- `BlockRenderer` iterates `ContentBlock[]`: text → markdown, toolCall → `ToolCallBlock`, toolResult → `ToolResultBlock`
+- `MarkdownRenderer` wraps ReactMarkdown with remarkGfm + custom component overrides
+- Streaming deltas produce plain string content (no blocks). Structured blocks arrive on `final` messages only
+
+**Markdown features:**
+- Bold, italic, inline code (`.inline-code`), headings (h1–h6), ordered/unordered lists, links (target="_blank"), blockquotes, tables (GFM), horizontal rules, task lists (GFM)
+- Fenced code blocks: react-syntax-highlighter (Prism) with `zuberiDark` warm-tinted theme
+- Code block header: language label + copy-to-clipboard button (Copy → Check icon, 2s feedback)
+- All content wrapped in `.zuberi-markdown` class with comprehensive CSS styling
+
+**Syntax highlighting theme (`zuberiDark`):**
+- Warm amber tags/selectors, warm green strings, warm coral keywords, warm gold functions
+- JetBrains Mono / Fira Code / Cascadia Code / Consolas font stack
+- All colors shifted toward warm tones (no cold blues) — matches obsidian/ember aesthetic
+
+**Tool block components:**
+- `ToolCallBlock`: Terminal icon + tool name + collapsible JSON args (chevron indicator only when args present)
+- `ToolResultBlock`: CheckCircle icon (green) + tool name + result text (auto-collapses if >5 lines, shows first 3 + "...")
+
+**New files:**
+- `src/components/chat/MessageContent.tsx` — Main rendering component with ReactMarkdown integration
+- `src/components/chat/ToolCallBlock.tsx` — Collapsible tool call display
+- `src/components/chat/ToolResultBlock.tsx` — Collapsible tool result display
+- `src/types/message.ts` — ContentBlock union type, ChatRole, ChatMessage (moved from inline types)
+- `src/lib/syntaxTheme.ts` — Custom Prism theme (warm-tinted Atom One Dark variant)
+- `src/test/markdown-render.test.tsx` — 30 tests covering all rendering paths
+
+**Modified files:**
+- `src/components/chat/ClawdChatInterface.tsx` — Added `extractContentBlocks()` function, import MessageContent, replaced inline `{message.content}` with `<MessageContent />`, removed local ChatRole/ChatMessage type defs (now imported from message.ts)
+- `src/globals.css` — ~200 lines of new CSS: `.zuberi-markdown` styles (headings, lists, code, tables, links, blockquotes), `.code-block-*` classes, `.tool-block-*` classes
+
+**Dependencies added:**
+- `react-syntax-highlighter` ^16.1.1 (Prism-based syntax highlighting)
+- `@types/react-syntax-highlighter` ^15.5.13
+
+**Content block extraction (`extractContentBlocks`):**
+- Preserves toolCall/toolResult blocks from OpenClaw content arrays on `final` messages
+- Handles both camelCase and snake_case type names (`toolCall`/`tool_call`, `toolResult`/`tool_result`)
+- Multiple field name patterns: `toolName`/`name`, `args`/`input`, `text`/`content`
+
+**Known:** Vite build produces ~1060KB chunk from react-syntax-highlighter language definitions — expected, not a problem
+
 ## Last Session Summary
 
 Session completed the following work (in order):
-1. **RTL-047 Phase 1: Functional Permission Selector** — Built complete permission system: types, policy engine, controlled ModeSelector, approval event handling with auto-resolution, 120s timeout, localStorage persistence, sessions.patch RPC
-2. **103 new tests** — Normalization, command classification (60+ commands), policy matrix (all 4 modes × 6 categories), ModeSelector component rendering and interaction
-3. **Browser preview verified** — All 4 modes render with correct icons, descriptions, and danger color on bypass
+1. **RTL-047 Phase 1: Functional Permission Selector** — Built complete permission system: types, policy engine, controlled ModeSelector, approval event handling with auto-resolution, 120s timeout, localStorage persistence, sessions.patch RPC (103 tests)
+2. **RTL-048: Markdown + Structured Block Rendering** — Added full markdown rendering for assistant messages (react-markdown + remark-gfm + react-syntax-highlighter with warm dark theme), structured block components (ToolCallBlock, ToolResultBlock), extractContentBlocks function, comprehensive CSS, 30 tests
 
-All 116/116 tests passing (13 smoke + 103 permissions).
+All 146/146 tests passing (13 smoke + 103 permissions + 30 markdown/blocks).
 
 ## Next Task
 
