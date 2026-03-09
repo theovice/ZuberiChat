@@ -614,6 +614,98 @@ Session completed the following work (in order):
 
 All 155/155 tests passing (13 smoke + 103 permissions + 30 markdown/blocks + 9 copy button).
 
+## Model Matrix Upgrade (2026-03-09)
+
+Upgraded `zuberi-model-matrix.html` from a 12-model Zuberi/KILO-specific reference into a general-use, hardware-aware open model explorer. Standalone HTML file — no ZuberiChat source files touched.
+
+**File:** `C:\Users\PLUTO\OneDrive\Documents\AIAgent\Staging\Intel\zuberi-model-matrix.html`
+**Backup:** `C:\Users\PLUTO\OneDrive\Documents\AIAgent\Staging\Intel\zuberi-model-matrix.bak.html`
+
+**What changed:**
+- Title: "Zuberi Home — Model Matrix" → "Model Matrix"
+- Models: 12 → 26 (Llama, Qwen, Mistral, Gemma, Granite, DeepSeek families)
+- Hardware selector: VRAM (6/8/12/16/24/48 GB+), CPU offload toggle, workload profile chips
+- Dynamic fit badges (Full/Offload/No) computed from selected hardware
+- Summary card: "Best for your hardware" — recalculates on hardware change
+- Speed column: single "Est. t/s" with provenance badges (M/C/E) replaces dual 24/48 GB columns
+- Caps column: icon grid (vision/tool use/reasoning/long context)
+- Structured notes: Best for / Avoid if / Hardware notes / Caveats
+- Reference rows (DeepSeek-V3, Mixtral 8x22B) marked with REF badge and honest hardware notes
+- All Zuberi/KILO/private references removed
+- File size: 15,366 → 36,032 bytes
+
+## Model Matrix Family Expansion (2026-03-09)
+
+Expanded Model Matrix with 3 new families (7 new models). Data-only change — no HTML/CSS/JS logic modified.
+
+**File:** `C:\Users\PLUTO\OneDrive\Documents\AIAgent\Staging\Intel\zuberi-model-matrix.html`
+**Pre-expansion backup:** `C:\Users\PLUTO\OneDrive\Documents\AIAgent\Staging\Intel\zuberi-model-matrix.pre-family-expansion.bak.html`
+
+**New families added:**
+- GPT-OSS (1): GPT-OSS 20B — OpenAI MoE, 3.6B active, fast inference
+- Phi (3): Phi-4 Mini (3.8B), Phi-4 Multimodal (5.6B, vision), Phi-4 (14B) — Microsoft reasoning/coding models
+- Aya (3): Aya Expanse 8B, Aya Expanse 32B, Aya Vision 8B — Cohere multilingual models
+
+**DBRX intentionally excluded** per spec.
+
+**Updated totals:**
+- Models: 26 → 33
+- Families: 6 → 9 (Qwen 9, Mistral 4, Granite 4, Phi 3, Llama 3, Gemma 3, DeepSeek 3, Aya 3, GPT-OSS 1)
+- File size: 36,032 → 40,654 bytes
+
+## Model Matrix Audit Fixes (2026-03-09)
+
+Data and logic corrections to Model Matrix. No ZuberiChat source files touched.
+
+**File:** `C:\Users\PLUTO\OneDrive\Documents\AIAgent\Staging\Intel\zuberi-model-matrix.html`
+**Pre-audit backup:** `C:\Users\PLUTO\OneDrive\Documents\AIAgent\Staging\Intel\zuberi-model-matrix.pre-audit-fixes.bak.html`
+
+**Fixes applied:**
+1. **GPT-OSS 20B context:** `8K` → `128K`, `longContext: true`, speed estimates moderated (130-140 → 80-85 t/s), provenance changed C → E
+2. **Offload threshold:** `selectedVram * 2.5` → `selectedVram * 1.5` (spec compliance)
+3. **Category ranked filtering:** Workload profiles now filter the visible list to relevant models only. Non-relevant models hidden behind "Show all models" toggle. Vision workload shows only vision-capable models. Empty state messages when no models fit.
+4. **Summary card scoring:** bestVision, bestAgent, bestCoding now factor speed/practicality alongside quality. bestVision requires `vision: true` (was already correct, now also weights speed).
+5. **`isWorkloadRelevant()` function added:** General=all, Coding=coding:true, Agent=toolScore>=3 or agentic, Research=reasoning or longContext, Vision=vision:true, Fast=fast:true
+
+**Updated totals:**
+- Models: 33 (unchanged)
+- File size: 40,654 → 44,177 bytes
+
+## RTL-051: Model Stack Upgrade + Native Ollama API Switch (2026-03-09)
+
+Upgraded Zuberi's model stack for RTX 5070 Ti 16GB and switched OpenClaw from OpenAI-compatible API to native Ollama API for reliable tool calling.
+
+**Config file:** `C:\Users\PLUTO\openclaw_config\openclaw.json`
+**Backup:** `C:\Users\PLUTO\openclaw_config\openclaw.json.bak`
+
+**API changes:**
+- `baseUrl`: `http://host.docker.internal:11434/v1` → `http://host.docker.internal:11434` (removed `/v1`)
+- `api`: `"openai-completions"` → `"ollama"` (native Ollama API)
+- Rationale: `/v1` OpenAI-compatible mode breaks tool calling — models return raw tool JSON as text instead of structured tool calls
+
+**New model stack (all 131072 context):**
+| Model | Role | Input | Size |
+|-------|------|-------|------|
+| `gemma3:12b` | Primary general + vision | text, image | 8.1 GB |
+| `gpt-oss:20b` | Heavy reasoning/tools | text | 13 GB |
+| `qwen2.5-coder:14b` | Dedicated coding | text | 9.0 GB |
+
+**Old models removed from config:**
+- `qwen3:14b-fast`, `qwen3:14b`, `qwen3-vl:8b-fast`, `gpt-oss:20b` (32K context versions)
+
+**Primary model:** `ollama/qwen3:14b-fast` → `ollama/gemma3:12b`
+
+**Compaction settings:** Kept as-is (mode: safeguard, reserveTokensFloor: 4000, softThresholdTokens: 2000). With 128K context the flush triggers at ~126K tokens — safe headroom.
+
+**Old models still on disk (eligible for cleanup, ~30.8 GB total):**
+- `qwen3:14b-fast` (9.3 GB), `qwen3:14b` (9.3 GB), `qwen3-vl:8b-fast` (6.1 GB), `qwen3-vl:8b` (6.1 GB)
+- To remove: `ollama rm <model-name>` for each
+
+**Verification:**
+- ✅ Gateway container restarted and healthy
+- ✅ Config verified inside container (no /v1, api: ollama, 3 models, 131072 context)
+- ✅ Smoke test: gemma3:12b responded correctly
+
 ## Next Task
 
 RTL-047 Phase 2: ToolApprovalCard UI for pending approvals with user interaction.
