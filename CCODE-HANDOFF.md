@@ -3,9 +3,9 @@
 **Updated:** 2026-03-09
 **Repo:** C:\Users\PLUTO\github\Repo\ZuberiChat
 **Installed version:** 1.0.0 (installed from NSIS build)
-**Repo version:** 1.0.0
-**Smoke tests:** 146/146 (run `pnpm test` to verify)
-**Pushed to remote:** Yes — `origin/main` is up to date with local `main`
+**Repo version:** 1.0.1
+**Smoke tests:** 155/155 (run `pnpm test` to verify)
+**Pushed to remote:** No — local `main` has unpushed v1.0.1 changes
 
 ## Current Sidebar State
 
@@ -20,7 +20,7 @@ Sidebar items (preserved but not rendered):
 **Kanban Board** now lives in the status bar below the input field, left-aligned next to the GPU model indicator.
 
 About Zuberi location: `ZuberiContextMenu.tsx` (right-click menu > Help > About Zuberi), NOT in the sidebar
-About Zuberi text: `Zuberi v0.1.1\nWahwearro Holdings LLC`
+About Zuberi text: `Zuberi v1.0.1\nWahwearro Holdings LLC` (update this when version bumps)
 
 ## Known Architecture Facts
 
@@ -548,6 +548,55 @@ Three compounding issues:
 
 **Capability awareness close-out:** CXDB record written — context 8, turn_id 18. Researcher-reviewed wording used. Follows RTL-050 Capability Awareness Rule (AGENTS.md v0.8.4, Section 13).
 
+## v1.0.1 — RTL-051b Close-out + Message Alignment + Copy Button (2026-03-09)
+
+### FINAL REPORT
+
+| Task | Result | Status |
+|------|--------|--------|
+| Pre-flight tests (146) | 146/146 | ✅ |
+| RTL-051b reproduced? | Not reproduced — all 6 `setMessages` ingress points audited, all assistant content paths have `isSentinelOutput()` guard. No history hydration path exists. | ✅ Closed |
+| RTL-051b fix applied or closed? | Closed — not reproduced in current build | ✅ |
+| Message alignment fixed | User messages changed from `textAlign: 'right'` to `textAlign: 'left'` | ✅ |
+| Copy button added | `CopyButton.tsx` component, hover-to-show on `.msg-bubble`, copies raw text/markdown | ✅ |
+| New tests written (count) | 9 tests in `src/test/copy-button.test.tsx` | ✅ |
+| Browser preview captured | User message verified left-aligned with text wrapping in browser preview | ✅ |
+| Version bumped to 1.0.1 | `tauri.conf.json` + About dialog updated | ✅ |
+| Post-fix tests (total) | 155/155 (146 + 9 new) | ✅ |
+
+### OBSTACLES LOG
+
+| # | Obstacle | Resolution | Impact |
+|---|----------|------------|--------|
+| 1 | Browser preview shows blank on initial load (chrome-error) | Manual navigate to `http://localhost:3000` after server ready | Known preview tool flakiness, no code impact |
+
+### Changes
+
+**New files:**
+- `src/components/chat/CopyButton.tsx` — Copy-to-clipboard button component (Copy/Check icons, 1.5s reset)
+- `src/test/copy-button.test.tsx` — 9 tests: rendering, clipboard interaction, copied state reset
+
+**Modified files:**
+- `src/components/chat/ClawdChatInterface.tsx` — Import CopyButton, add to message rendering, change user `textAlign: 'right'` → `'left'`, add `.msg-bubble` class and `position: relative` to message container
+- `src/globals.css` — Added `.msg-bubble .msg-copy-btn` hover CSS (opacity 0 → 1, positioned top-right)
+- `src-tauri/tauri.conf.json` — Version `1.0.0` → `1.0.1`
+- `src/components/layout/ZuberiContextMenu.tsx` — About dialog `v1.0.0` → `v1.0.1`
+
+### Copy button behavior
+- Appears on hover (top-right of message bubble, CSS opacity transition)
+- Copies raw text content (markdown source for assistant, plain text for user)
+- Click: Copy icon → Check icon (green, 1.5s) → Copy icon
+- Uses lucide-react `Copy` and `Check` icons
+- Does not render on sentinel-suppressed messages (they're removed from state)
+- Does not interfere with ToolCallBlock/ToolResultBlock rendering
+
+### CXDB capability awareness note
+CXDB capability record written — context 8, turn_id 19. Covers copy button + left-aligned user messages. Per AGENTS.md v0.8.4 Section 13 (Capability Awareness Rule).
+
+## About Dialog Version Fix (2026-03-09)
+
+About dialog (Help → About Zuberi in ZuberiContextMenu.tsx) had stale hardcoded `v0.1.1`. Updated to `v1.0.0` to match tauri.conf.json. Approach: hardcoded string update (not dynamic `getVersion()`) — lowest risk, no new imports, no async, no mock concerns. Version only changes during explicit bumps. Tests: 146/146 before → 146/146 after.
+
 ## Last Session Summary
 
 Session completed the following work (in order):
@@ -560,8 +609,10 @@ Session completed the following work (in order):
 7. **RTL-002 Part 2b Production Workflow** — Created "Zuberi AI Audit Intake v1" (CXDB + AgenticMail), resolved Docker networking obstacles, all 4 nodes verified
 8. **RTL-050 Capability Awareness Backfill** — Wrote 8 CXDB capability records (context 8, turns 10–17) for all live verified capabilities. Updated AGENTS.md to v0.8.4 with Capability Awareness Rule (Section 13). No code changes.
 9. **RTL-051 Debug Leaked Control Outputs** — Added frontend sentinel filtering (`isSentinelOutput()`) to suppress NO, NO_REPLY, HEARTBEAT_OK from rendering in main chat. Root cause: no frontend filtering + heartbeat shares session + bare NO is a model template artifact not caught by backend. `deliver: false` confirmed correct.
+10. **About dialog version fix** — Updated hardcoded `v0.1.1` → `v1.0.0` in ZuberiContextMenu.tsx to match tauri.conf.json.
+11. **v1.0.1** — RTL-051b closed (not reproduced). User message alignment fixed (right → left). Copy button added to all message bubbles (hover-to-show, copies raw text). 9 new tests. Version bumped to 1.0.1.
 
-All 146/146 tests passing (13 smoke + 103 permissions + 30 markdown/blocks).
+All 155/155 tests passing (13 smoke + 103 permissions + 30 markdown/blocks + 9 copy button).
 
 ## Next Task
 

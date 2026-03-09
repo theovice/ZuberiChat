@@ -7,6 +7,7 @@ import { ConnectionStatus } from '@/components/chat/ConnectionStatus';
 import { ModelSelector } from '@/components/chat/ModelSelector';
 import { ModeSelector } from '@/components/chat/ModeSelector';
 import { MessageContent } from '@/components/chat/MessageContent';
+import { CopyButton } from '@/components/chat/CopyButton';
 // GpuStatus removed from toolbar — component kept for future use
 import { ZuberiContextMenu } from '@/components/layout/ZuberiContextMenu';
 import { AttachButton, FileChips, type QueuedFile } from '@/components/chat/FileAttachments';
@@ -1013,15 +1014,18 @@ export function ClawdChatInterface() {
           {messages.map((message) => (
             <div
               key={message.id}
+              className="msg-bubble"
               style={{
-                textAlign: message.role === 'user' ? 'right' : 'left',
+                textAlign: 'left',
                 color: message.role === 'user' ? 'var(--text-primary)' : 'var(--text-ember)',
                 fontSize: '0.9rem',
                 lineHeight: 1.6,
                 maxWidth: '85%',
                 alignSelf: message.role === 'user' ? 'flex-end' : 'flex-start',
+                position: 'relative',
               }}
             >
+              <CopyButton text={message.content} />
               <MessageContent
                 content={message.content}
                 blocks={message.blocks}

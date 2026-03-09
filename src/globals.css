@@ -283,6 +283,28 @@ input, textarea, [contenteditable="true"] {
   scrollbar-width: none;
 }
 
+/* ── Message Bubble — copy button on hover ─────────────── */
+.msg-bubble .msg-copy-btn {
+  position: absolute;
+  top: 0;
+  right: 0;
+  opacity: 0;
+  transition: opacity 120ms ease;
+  background: none;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+  color: var(--text-muted);
+  line-height: 1;
+  z-index: 1;
+}
+.msg-bubble:hover .msg-copy-btn {
+  opacity: 1;
+}
+.msg-copy-btn:hover {
+  color: var(--text-primary);
+}
+
 /* ── Context Menu ─────────────────────────────────────── */
 .ctx-menu {
   background: var(--surface-1);

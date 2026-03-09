@@ -263,7 +263,7 @@ export function ZuberiContextMenu({ onNewConversation, children }: Props) {
           type: 'item',
           label: 'About Zuberi',
           action: () => {
-            window.alert('Zuberi v0.1.1\nWahwearro Holdings LLC');
+            window.alert('Zuberi v1.0.1\nWahwearro Holdings LLC');
             close();
           },
         },
