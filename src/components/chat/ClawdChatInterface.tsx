@@ -1,7 +1,7 @@
 import { FormEvent, KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { ArrowUp, Cpu } from 'lucide-react';
+import { ArrowUp, Cpu, LayoutGrid } from 'lucide-react';
 import { useWebSocket, type WebSocketMessage } from '@/hooks/useWebSocket';
 import { ConnectionStatus } from '@/components/chat/ConnectionStatus';
 import { ModelSelector } from '@/components/chat/ModelSelector';
@@ -917,7 +917,7 @@ export function ClawdChatInterface() {
 
   return (
     <div
-      className="mx-auto flex h-full w-full max-w-4xl flex-col px-6"
+      className="mx-auto flex h-full w-full max-w-[1075px] flex-col px-6"
       style={{ overflow: 'visible', position: 'relative' }}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -959,7 +959,7 @@ export function ClawdChatInterface() {
               key={message.id}
               style={{
                 textAlign: message.role === 'user' ? 'right' : 'left',
-                color: message.role === 'user' ? 'var(--ember)' : 'var(--text-primary)',
+                color: message.role === 'user' ? 'var(--text-primary)' : 'var(--text-ember)',
                 fontSize: '0.9rem',
                 lineHeight: 1.6,
                 maxWidth: '85%',
@@ -981,7 +981,7 @@ export function ClawdChatInterface() {
         onSubmit={handleSubmit}
         style={{ flexShrink: 0, paddingBottom: 16, paddingTop: 8 }}
       >
-        <div className="mx-auto max-w-3xl">
+        <div className="mx-auto max-w-[920px]">
           {/* Unified input + toolbar container — single rounded box */}
           <div
             className="overflow-hidden border"
@@ -1046,8 +1046,17 @@ export function ClawdChatInterface() {
             </div>
           </div>
 
-          {/* Status bar — GPU model */}
-          <div className="mt-1 flex items-center justify-end px-1" style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+          {/* Status bar — Kanban + GPU model */}
+          <div className="mt-1 flex items-center justify-between px-1" style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+            <button
+              onClick={() => invoke('open_url_in_browser', { url: 'http://100.100.101.1:3001' }).catch(console.error)}
+              className="flex items-center gap-1"
+              style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '1px 4px', fontSize: 10 }}
+              title="Kanban Board"
+            >
+              <LayoutGrid size={10} />
+              <span>Kanban</span>
+            </button>
             <div className="flex items-center gap-1">
               <Cpu size={10} style={{ color: gpuModel ? 'var(--status-success)' : 'var(--text-muted)' }} />
               <span style={{ color: gpuModel ? 'var(--status-success)' : 'var(--text-muted)' }}>

@@ -91,6 +91,7 @@ export function Titlebar({ sidebarOpen = false, onToggleSidebar, updateAvailable
   return (
     <div className="titlebar" data-tauri-drag-region>
       {/* Left: sidebar toggle + Zuberi title */}
+      {/* SIDEBAR TOGGLE HIDDEN — RTL-049. Uncomment to restore.
       <div className="titlebar-menu-anchor" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
         <button
           className="titlebar-button sidebar-toggle"
@@ -101,6 +102,10 @@ export function Titlebar({ sidebarOpen = false, onToggleSidebar, updateAvailable
         >
           <PanelLeft size={14} />
         </button>
+        <span className="titlebar-title">Zuberi</span>
+      </div>
+      */}
+      <div className="titlebar-menu-anchor" style={{ display: 'flex', alignItems: 'center', gap: 4, paddingLeft: 12 }}>
         <span className="titlebar-title">Zuberi</span>
       </div>
 

@@ -45,11 +45,13 @@ export default function App() {
         availableVersion={availableVersion}
       />
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
+        {/* SIDEBAR HIDDEN — RTL-049. Uncomment to restore.
         <Sidebar
           open={sidebarOpen}
           updateAvailable={updateAvailable}
           availableVersion={availableVersion}
         />
+        */}
         <div style={{ flex: 1, overflow: "hidden" }}>
           <ClawdChatInterface />
         </div>

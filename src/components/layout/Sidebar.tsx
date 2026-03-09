@@ -60,7 +60,7 @@ export function Sidebar({ open, updateAvailable = false, availableVersion = null
 
         <div className="sidebar-separator" />
 
-        {/* Bottom links */}
+        {/* KANBAN REMOVED — RTL-049. Moved to bottom bar in ClawdChatInterface.
         <button
           className="sidebar-item"
           onClick={() => {
@@ -70,6 +70,7 @@ export function Sidebar({ open, updateAvailable = false, availableVersion = null
           <LayoutGrid size={16} />
           <span>Kanban Board</span>
         </button>
+        */}
 
         {updateAvailable && availableVersion && (
           <button

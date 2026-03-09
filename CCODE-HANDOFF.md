@@ -1,19 +1,23 @@
 # ZuberiChat — ccode Handoff
 
-**Updated:** 2026-03-08
+**Updated:** 2026-03-09
 **Repo:** C:\Users\PLUTO\github\Repo\ZuberiChat
 **Installed version:** 0.1.1 (freshly installed from NSIS build)
-**Repo version:** 0.1.1
+**Repo version:** 0.1.2
 **Smoke tests:** 146/146 (run `pnpm test` to verify)
 **Pushed to remote:** Yes — `origin/main` is up to date with local `main`
 
 ## Current Sidebar State
 
-Items (in order):
+**SIDEBAR HIDDEN — RTL-049.** Code preserved in App.tsx and Titlebar.tsx (comment markers). Uncomment to restore.
+
+Sidebar items (preserved but not rendered):
 1. **New chat** — icon: SquarePen, event: `emit('new-conversation')`
 2. **Settings** — icon: Settings, event: `emit('open-settings')`
 3. *(spacer)*
-4. **Kanban Board** — icon: LayoutGrid, action: `invoke('open_url_in_browser', { url: 'http://100.100.101.1:3001' })`
+4. ~~**Kanban Board**~~ — moved to bottom bar in ClawdChatInterface.tsx (RTL-049)
+
+**Kanban Board** now lives in the status bar below the input field, left-aligned next to the GPU model indicator.
 
 About Zuberi location: `ZuberiContextMenu.tsx` (right-click menu > Help > About Zuberi), NOT in the sidebar
 About Zuberi text: `Zuberi v0.1.1\nWahwearro Holdings LLC`
@@ -160,11 +164,11 @@ The app renders at `localhost:3000` in a plain browser (no Tauri) using the offi
 ## Last 5 Commits
 
 ```
+72c7885 Bump version to 0.1.2
+7a6f727 RTL-048: Markdown rendering + structured block rendering
 5540b9f RTL-047 Phase 1: Functional permission selector with approval handling
 6464ab6 UI polish: remove gear icon, square input corners, upward dropdowns, color token discipline
 7eab821 Add browser-safe preview mode for UI development
-1abd3c2 RTL-034: Force Cargo to re-embed BUILD_COMMIT on every new commit
-e6a153a RTL-034: Fix post-install version metadata sync
 ```
 
 ## Do Not Touch
@@ -318,11 +322,45 @@ Assistant messages now render through react-markdown with GFM support and syntax
 
 **Known:** Vite build produces ~1060KB chunk from react-syntax-highlighter language definitions — expected, not a problem
 
+## RTL-049: UI Polish — Font, Layout, Colors, Sidebar Hidden, Kanban Relocated
+
+**What changed:**
+
+1. **Font**: Body font changed to `'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif` at `font-size: 14px` (Windows Office default). Code blocks and inline code keep monospace.
+
+2. **Conversation area widened 20%**: Outer container `max-w-4xl` (896px) → `max-w-[1075px]`. Inner form `max-w-3xl` (768px) → `max-w-[920px]`. Both remain centered and responsive.
+
+3. **Message colors swapped**:
+   - User messages: `var(--text-primary)` (white #eae9e9)
+   - Assistant messages: `var(--text-ember)` (warm amber #f0c060)
+   - Markdown headings stay `var(--text-primary)` for visual hierarchy
+   - Links, inline code, blockquotes, tables keep existing distinct colors
+
+4. **Sidebar hidden (code preserved)**:
+   - `App.tsx`: Sidebar JSX commented out with `SIDEBAR HIDDEN — RTL-049` marker
+   - `Titlebar.tsx`: Sidebar toggle button commented out, replaced with plain "Zuberi" title
+   - All sidebar component files intact and unchanged
+   - Sidebar state/toggle logic still in App.tsx (no-op while hidden)
+
+5. **Kanban Board moved to bottom bar**:
+   - Removed from Sidebar.tsx (commented out with `KANBAN REMOVED — RTL-049` marker)
+   - Added to ClawdChatInterface.tsx status bar: left-aligned LayoutGrid icon + "Kanban" text
+   - Same functionality: `invoke('open_url_in_browser', { url: 'http://100.100.101.1:3001' })`
+   - Styled consistently with GPU model indicator (10px font, muted color)
+
+**Modified files:**
+- `src/globals.css` — Font family + font-size on body
+- `src/components/chat/ClawdChatInterface.tsx` — Widened max-widths, swapped message colors, added Kanban button + LayoutGrid import
+- `src/App.tsx` — Sidebar JSX commented out
+- `src/components/layout/Titlebar.tsx` — Sidebar toggle hidden, plain Zuberi title shown
+- `src/components/layout/Sidebar.tsx` — Kanban Board item commented out
+
 ## Last Session Summary
 
 Session completed the following work (in order):
-1. **RTL-047 Phase 1: Functional Permission Selector** — Built complete permission system: types, policy engine, controlled ModeSelector, approval event handling with auto-resolution, 120s timeout, localStorage persistence, sessions.patch RPC (103 tests)
-2. **RTL-048: Markdown + Structured Block Rendering** — Added full markdown rendering for assistant messages (react-markdown + remark-gfm + react-syntax-highlighter with warm dark theme), structured block components (ToolCallBlock, ToolResultBlock), extractContentBlocks function, comprehensive CSS, 30 tests
+1. **RTL-047 Phase 1: Functional Permission Selector** — 103 tests
+2. **RTL-048: Markdown + Structured Block Rendering** — 30 tests
+3. **RTL-049: UI Polish** — Font (sans-serif 14px), wider conversation area (+20%), message color swap (user=white, assistant=ember), sidebar hidden, Kanban relocated to bottom bar
 
 All 146/146 tests passing (13 smoke + 103 permissions + 30 markdown/blocks).
 
