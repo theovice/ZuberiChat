@@ -2,8 +2,8 @@
 
 **Updated:** 2026-03-09
 **Repo:** C:\Users\PLUTO\github\Repo\ZuberiChat
-**Installed version:** 0.1.1 (freshly installed from NSIS build)
-**Repo version:** 0.1.2
+**Installed version:** 1.0.0 (installed from NSIS build)
+**Repo version:** 1.0.0
 **Smoke tests:** 146/146 (run `pnpm test` to verify)
 **Pushed to remote:** Yes — `origin/main` is up to date with local `main`
 
@@ -164,11 +164,11 @@ The app renders at `localhost:3000` in a plain browser (no Tauri) using the offi
 ## Last 5 Commits
 
 ```
+1346bd5 Bump version to 1.0.0
+553c216 RTL-049: UI polish — font, layout, message colors, sidebar hidden, Kanban relocated
 72c7885 Bump version to 0.1.2
 7a6f727 RTL-048: Markdown rendering + structured block rendering
 5540b9f RTL-047 Phase 1: Functional permission selector with approval handling
-6464ab6 UI polish: remove gear icon, square input corners, upward dropdowns, color token discipline
-7eab821 Add browser-safe preview mode for UI development
 ```
 
 ## Do Not Touch
@@ -355,12 +355,211 @@ Assistant messages now render through react-markdown with GFM support and syntax
 - `src/components/layout/Titlebar.tsx` — Sidebar toggle hidden, plain Zuberi title shown
 - `src/components/layout/Sidebar.tsx` — Kanban Board item commented out
 
+## RTL-002 Part 1 Diagnostic — n8n Bidirectional Integration (2026-03-09)
+
+Read-only diagnostic. No changes made.
+
+| Task | Result | Notes |
+|------|--------|-------|
+| n8n health (CEG) | **200** | `http://100.100.101.1:5678/healthz` — healthy |
+| API key in CEG env | **NO** | `N8N_API_KEY` not set in shell env, not in `.bashrc` |
+| n8n API reachability | **401** | `/api/v1/workflows` reachable, auth required (expected) |
+| n8n skill file contents | **Present** | `C:\Users\PLUTO\openclaw_workspace\skills\n8n\SKILL.md` — 131 lines, has JWT API key, all CRUD operations, webhook registry (empty), autonomy rules |
+| OpenClaw → n8n reachability | **200** | `docker exec openclaw-openclaw-gateway-1 curl ... /healthz` — container can reach n8n directly |
+
+**Key findings:**
+- n8n is healthy and reachable from both CEG shell and OpenClaw Docker container
+- API key exists ONLY in the workspace skill file (`SKILL.md`), NOT in CEG shell environment
+- Auth works (401 without key = API is protected as expected)
+- Webhook registry is empty — no workflows created yet
+- OpenClaw container has full network access to CEG/n8n (no Docker network isolation issue)
+
+## RTL-002 Part 2 — Minimal End-to-End n8n Proof (2026-03-09)
+
+Successfully created, activated, triggered, and verified a webhook workflow via n8n REST API.
+
+| Step | Action | Result |
+|------|--------|--------|
+| 1. Get API key | Read from `SKILL.md` | JWT key extracted |
+| 2. Create workflow | `POST /api/v1/workflows` | Created "Zuberi Intake Proof v1" (ID: `iQ5xn13IyUqnJbW2`) |
+| 3. Activate | `POST /api/v1/workflows/{id}/activate` | `active: true` (note: PATCH not supported, use POST `/activate` endpoint) |
+| 4. Trigger webhook | `POST /webhook/zuberi-intake` | HTTP 200 — payload received and processed |
+| 5. Verify execution | `GET /api/v1/executions?workflowId={id}&limit=1` | Execution ID: 4, Status: **success**, Mode: webhook |
+
+**Workflow details:**
+- Name: Zuberi Intake Proof v1
+- Nodes: Webhook (POST, path `zuberi-intake`, responseMode `lastNode`) → Capture Payload (Set node: title, summary, received_at)
+- Connections: Webhook → Capture Payload
+- Webhook URL: `http://100.100.101.1:5678/webhook/zuberi-intake`
+
+**Troubleshooting notes:**
+- `PATCH /api/v1/workflows/{id}` with `{"active":true}` returns "PATCH method not allowed" — use dedicated `POST /activate` and `POST /deactivate` endpoints instead
+- Webhook node created via API may not register immediately after activation — workaround: deactivate → PUT update workflow (with `webhookId` on Webhook node) → reactivate → wait 3s before triggering
+- The `webhookId` field on the Webhook node (UUID) is needed for reliable webhook registration via API
+- n8n container env confirms: `WEBHOOK_URL=http://100.100.101.1:5678/`, `N8N_HOST=100.100.101.1`, `N8N_PORT=5678`
+
+**SKILL.md webhook registry should be updated to:**
+```
+Workflow                    Webhook Path                    Method   Purpose
+──────────────────────────────────────────────────────────────────
+Zuberi Intake Proof v1      /webhook/zuberi-intake          POST     RTL-002 end-to-end proof
+```
+
+## RTL-002 Part 2b — First Production Workflow: AI Audit Intake (2026-03-09)
+
+First production workflow built on the now-proven RTL-002 n8n integration. RTL-002 is closed; this is feature expansion.
+
+### FINAL REPORT
+
+| Task | Result | Status |
+|------|--------|--------|
+| AgenticMail send endpoint confirmed | `POST http://100.100.101.1:3100/api/agenticmail/mail/send` (Bearer auth) | ✅ |
+| CXDB store endpoint + schema confirmed | `POST http://100.100.101.1:9010/v1/contexts/7/turns` (no auth, type_id + payload.role + payload.text) | ✅ |
+| API key located | From `skills/n8n/SKILL.md` | ✅ |
+| Workflow created + activated | ID: `Lv2v6AAVfS11kqeY`, active: true | ✅ |
+| Webhook test response | HTTP 200, `{"status":"ok","stored":true,"notified":true}` | ✅ |
+| Execution status | Execution ID: 7, status: **success**, mode: webhook | ✅ |
+| CXDB node response | 201 — context_id: 7, turn_id: 9 | ✅ |
+| AgenticMail node response | messageId: `0cbcc033-bb19...`, to: jamesmwaweru@gmail.com | ✅ |
+| n8n skill registry updated | Active Workflows table + Webhook Registry updated in SKILL.md | ✅ |
+
+### OBSTACLES LOG
+
+| # | Obstacle | Resolution | Impact |
+|---|----------|------------|--------|
+| 1 | n8n expression parser `{{ }}` conflicts with `}}` in nested JS object literals | Added spaces between consecutive `}` in expressions (`} }` instead of `}}`) | Expression syntax constraint for all future n8n workflows |
+| 2 | `\n` in JSON string values breaks n8n expression parser | Replaced newlines with ` \| ` pipe separators in expression text | Minor formatting difference in stored/emailed text |
+| 3 | n8n Docker container (bridge network) cannot reach host services (CXDB, AgenticMail) due to host firewall | Recreated n8n container with `--network host` | n8n now uses host networking — port 5678 directly on host, Docker DNS names unavailable |
+| 4 | AgenticMail API bound only to Tailscale IP (100.100.101.1) | Changed `config.json` api.host from `100.100.101.1` to `0.0.0.0`, restarted service | AgenticMail now reachable from all interfaces |
+
+### Workflow details
+
+- **Name:** Zuberi AI Audit Intake v1
+- **ID:** `Lv2v6AAVfS11kqeY`
+- **Webhook URL:** `http://100.100.101.1:5678/webhook/zuberi-audit-intake`
+- **Nodes:** Webhook → CXDB Store (HTTP Request) → Send Email (HTTP Request) → Respond to Webhook
+- **CXDB context:** context_id 7 (pre-created for audit records)
+- **Email recipient:** jamesmwaweru@gmail.com (via zuberiwaweru+Zuberi@gmail.com relay)
+
+### Infrastructure changes
+
+- n8n container: recreated with `--network host` (was `docker_default` bridge)
+- n8n data persisted in `/opt/zuberi/docker/n8n` volume mount (unchanged)
+- AgenticMail: `~/.agenticmail/config.json` api.host changed to `0.0.0.0` (was `100.100.101.1`)
+- Both workflow IDs: `iQ5xn13IyUqnJbW2` (proof), `Lv2v6AAVfS11kqeY` (production audit intake)
+
+## RTL-050 — Capability Awareness Backfill (2026-03-09)
+
+Wrote durable CXDB memory records for all major live, verified capabilities so Zuberi has persistent awareness across sessions. No code changes — memory-only operation.
+
+### FINAL REPORT
+
+| Capability | CXDB Record Written | turn_id | Status |
+|-----------|-------------------|---------|--------|
+| Permission selector (RTL-047) | ✅ | 10 | Live, verified |
+| Markdown rendering (RTL-048) | ✅ | 11 | Live, verified |
+| One-click update (RTL-034) | ✅ | 12 | Live, verified |
+| Dispatch wrapper (CEG:3003) | ✅ | 13 | Live, verified |
+| AgenticMail (CEG:3100) | ✅ | 14 | Live, verified |
+| n8n proof workflow | ✅ | 15 | Live, verified |
+| n8n AI Audit Intake workflow | ✅ | 16 | Live, verified |
+| Browser preview (dev-support) | ✅ | 17 | Live, verified (dev-only) |
+| AGENTS.md v0.8.4 | ✅ | — | Section 13 added |
+| CXDB retrieval verified | ✅ | — | All 8 records retrieved from context 8 |
+
+All records stored in CXDB context_id 8, turns 10–17.
+
+### Schema Adaptation
+
+CXDB has no native `tags` field. Placeholder fields (`type`, `content`, `tags`) were adapted:
+- `type` → `type_id: "zuberi.memory.Task"` (closest match for completed capabilities)
+- `content` → `payload.text` (with tag keywords embedded at end of text)
+- `tags` → embedded as "Tags: keyword1, keyword2" suffix in text
+
+### Skipped Records
+
+- **Record 9 (compaction tuning):** Intentionally omitted per spec — system configuration detail, not a capability update.
+
+### OBSTACLES LOG
+
+No obstacles encountered. All CXDB writes succeeded on first attempt. Schema adaptation was straightforward.
+
+### Capability Awareness Rule (going forward)
+
+All capability changes must now close with four items (AGENTS.md v0.8.4, Section 13):
+1. **Skill file update** — operational truth Zuberi reads
+2. **Workspace doc update** — when behavior or rules change
+3. **CXDB capability record** — durable recall across sessions
+4. **CCODE-HANDOFF.md note** — ccode continuity only
+
+### Files Modified
+
+- `C:\Users\PLUTO\openclaw_workspace\AGENTS.md` — bumped to v0.8.4, added Section 13 (Capability Awareness Rule)
+- CXDB context 8 created with 8 capability turns (CEG:9010)
+
+No ZuberiChat source files touched. No pnpm or cargo commands run.
+
+## RTL-051 — Debug Leaked Internal Control Outputs in Main Chat (2026-03-09)
+
+User-visible chat was showing internal control outputs: `NO` (model template artifact) and `HEARTBEAT_OK` (heartbeat sentinel) instead of normal assistant replies.
+
+### Root Cause
+
+Three compounding issues:
+
+1. **No frontend sentinel filtering.** The frontend rendered ALL text arriving via chat/agent WebSocket events. The backend has suppression for `NO_REPLY` and `HEARTBEAT_OK` (via `isSilentReplyText()` and `shouldHideHeartbeatChatOutput()` in OpenClaw), but bare `NO` is NOT a recognized backend sentinel. When backend suppression failed or didn't apply, control outputs leaked to UI.
+
+2. **Heartbeat shares session with user chat.** Heartbeat runs on `agent:main:main` — the same session key as user chat. Even though heartbeat is disabled (`every: "0m"` in openclaw.json), it can still be triggered by execution completion events or wake signals. Its output flows through the same chat event stream.
+
+3. **`NO` is a model template artifact, not a sentinel.** The qwen3:14b-fast model can output bare `NO` on first turn due to the think template scaffolding issue (documented in RTL-041). The backend's `isSilentReplyText()` only matches `NO_REPLY`, not bare `NO`.
+
+### FINAL REPORT
+
+| Area | Finding | Fix Applied | Status |
+|------|---------|-------------|--------|
+| chat.send deliver flag | `deliver: false` is CORRECT — controls external channel delivery (Slack/Discord), not webchat. Webchat receives responses via WS broadcast events regardless. No change needed. | None | ✅ Correct as-is |
+| heartbeat routing | Shares `agent:main:main` session with user chat. Disabled (`every: "0m"`) but can trigger via execution events. Backend has `shouldHideHeartbeatChatOutput()` suppression. | Frontend sentinel filter catches `HEARTBEAT_OK` as defense-in-depth | ✅ Fixed |
+| sentinel suppression | Backend suppresses `NO_REPLY` but NOT bare `NO`. Frontend had zero filtering. | Added `isSentinelOutput()` filter in delta, final, and agent event handlers. Catches `NO`, `NO_REPLY`, `HEARTBEAT_OK` (exact and prefix). | ✅ Fixed |
+| compaction interaction | Compaction mode `safeguard` can trigger between runs. First `NO` likely came from near-full context → short model output → immediate compaction. Compaction does not retry/resume user runs. | Sentinel filter prevents `NO` from rendering regardless of compaction timing. | ✅ Mitigated |
+| seq gap handling | Pre-existing issue (RTL-042b). Seq gaps come from OpenClaw backend agent stream. Cosmetic — not causing sentinel leakage. | No fix needed for this ticket. | ⚠️ Pre-existing |
+
+### OBSTACLES LOG
+
+| # | Obstacle | Resolution | Impact |
+|---|----------|------------|--------|
+| — | None | — | — |
+
+### Fix Details
+
+**File modified:** `src/components/chat/ClawdChatInterface.tsx`
+
+**What was added:**
+- `SENTINEL_EXACT` set: `['NO', 'NO_REPLY', 'HEARTBEAT_OK']`
+- `isSentinelOutput(text)` function: matches exact tokens (trimmed, case-sensitive) and `HEARTBEAT_OK` prefix
+- Sentinel check in chat delta handler — suppresses control output during streaming
+- Sentinel check in chat final handler — suppresses final + removes any streaming placeholder
+- Sentinel check in agent event handler — suppresses agent stream control outputs
+- `[RTL-051]` console.warn logs on every suppression for diagnostics
+- `[RTL-051:SEND]` enhanced logging on outgoing chat.send (payload, deliver flag, run classification)
+
+**Tests:** 146/146 before fix → 146/146 after fix. Zero regressions.
+
+**`deliver: false` verdict:** Correct and intentional. The `deliver` parameter in OpenClaw controls external channel delivery (Slack, Discord, etc.). For webchat-only usage, `deliver: false` prevents duplicate delivery. The message is still added to conversation history and a run is still triggered. No change needed.
+
+**Capability awareness close-out:** CXDB record written — context 8, turn_id 18. Researcher-reviewed wording used. Follows RTL-050 Capability Awareness Rule (AGENTS.md v0.8.4, Section 13).
+
 ## Last Session Summary
 
 Session completed the following work (in order):
 1. **RTL-047 Phase 1: Functional Permission Selector** — 103 tests
 2. **RTL-048: Markdown + Structured Block Rendering** — 30 tests
 3. **RTL-049: UI Polish** — Font (sans-serif 14px), wider conversation area (+20%), message color swap (user=white, assistant=ember), sidebar hidden, Kanban relocated to bottom bar
+4. **Version 1.0.0 released** — Major bump, built, verified, installed via NSIS
+5. **RTL-002 Part 1 Diagnostic** — n8n health, API key, reachability, skill file, container connectivity — all green
+6. **RTL-002 Part 2 End-to-End Proof** — Created "Zuberi Intake Proof v1" workflow, activated, triggered webhook, verified execution succeeded (ID: 4, status: success)
+7. **RTL-002 Part 2b Production Workflow** — Created "Zuberi AI Audit Intake v1" (CXDB + AgenticMail), resolved Docker networking obstacles, all 4 nodes verified
+8. **RTL-050 Capability Awareness Backfill** — Wrote 8 CXDB capability records (context 8, turns 10–17) for all live verified capabilities. Updated AGENTS.md to v0.8.4 with Capability Awareness Rule (Section 13). No code changes.
+9. **RTL-051 Debug Leaked Control Outputs** — Added frontend sentinel filtering (`isSentinelOutput()`) to suppress NO, NO_REPLY, HEARTBEAT_OK from rendering in main chat. Root cause: no frontend filtering + heartbeat shares session + bare NO is a model template artifact not caught by backend. `deliver: false` confirmed correct.
 
 All 146/146 tests passing (13 smoke + 103 permissions + 30 markdown/blocks).
 

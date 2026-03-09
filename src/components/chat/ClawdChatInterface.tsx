@@ -18,6 +18,29 @@ import { normalizeApprovalRequest, resolveApprovalDecision } from '@/lib/permiss
 
 const SESSION_KEY = 'agent:main:main';
 
+// ── Sentinel / control output filtering ────────────────────────────
+// These tokens are internal control outputs that must never render as visible
+// assistant content.  The backend (OpenClaw) has its own suppression for some
+// of these, but the frontend filters defensively as a second layer.
+const SENTINEL_EXACT = new Set(['NO', 'NO_REPLY', 'HEARTBEAT_OK']);
+
+/**
+ * Returns true if `text` is a known internal sentinel/control output that
+ * should be suppressed from visible chat.
+ *
+ * Matches:
+ *  - Exact tokens: NO, NO_REPLY, HEARTBEAT_OK (trimmed, case-sensitive)
+ *  - HEARTBEAT_OK prefix: "HEARTBEAT_OK. …" (heartbeat with appended text)
+ */
+function isSentinelOutput(text: string | null | undefined): boolean {
+  if (!text) return false;
+  const trimmed = text.trim();
+  if (SENTINEL_EXACT.has(trimmed)) return true;
+  // Heartbeat token can appear as prefix with trailing content
+  if (trimmed.startsWith('HEARTBEAT_OK')) return true;
+  return false;
+}
+
 type ModelEntry = { id: string; name: string; parameterSize?: string; family?: string };
 
 function buildConnectRequest(token: string): WebSocketMessage {
@@ -372,6 +395,16 @@ export function ClawdChatInterface() {
           console.info('[WS:DELTA]', { text, rawMessage: JSON.stringify(payload.message ?? null).slice(0, 300) });
           if (typeof text !== 'string') return;
 
+          // ── Sentinel suppression (RTL-051) ──
+          // Suppress control outputs like NO, NO_REPLY, HEARTBEAT_OK.
+          // Cumulative deltas that are ONLY a sentinel token are suppressed.
+          // If the model is mid-stream building "Not a problem…", the next
+          // delta will no longer match and rendering will proceed normally.
+          if (isSentinelOutput(text)) {
+            console.warn('[RTL-051] Sentinel suppressed in delta:', JSON.stringify(text));
+            return;
+          }
+
           // Assign streaming ID BEFORE the state updater — never mutate refs inside updaters.
           // React 19 StrictMode double-invokes updaters; ref mutation inside causes the
           // second invocation to take the wrong branch, dropping the message from state.
@@ -395,6 +428,22 @@ export function ClawdChatInterface() {
           const text = extractTextFromMessage(payload.message);
           const blocks = extractContentBlocks(payload.message);
           console.info('[WS:FINAL]', { text, blocks: blocks?.length, streamingId: streamingMessageIdRef.current, rawMessage: JSON.stringify(payload.message ?? null).slice(0, 300) });
+
+          // ── Sentinel suppression on final (RTL-051) ──
+          // If the final text is a sentinel/control output, remove any
+          // partially-streamed message and reset refs without rendering.
+          if (isSentinelOutput(text)) {
+            console.warn('[RTL-051] Sentinel suppressed in final:', JSON.stringify(text),
+              '| runId:', payload.runId, '| streamingId:', streamingMessageIdRef.current);
+            // Remove the streaming placeholder if one was created
+            if (streamingMessageIdRef.current) {
+              const deadId = streamingMessageIdRef.current;
+              setMessages((current) => current.filter((entry) => entry.id !== deadId));
+            }
+            activeRunIdRef.current = null;
+            streamingMessageIdRef.current = null;
+            return;
+          }
 
           if (text && streamingMessageIdRef.current) {
             const finalStreamId = streamingMessageIdRef.current;
@@ -445,6 +494,12 @@ export function ClawdChatInterface() {
         const text = extractTextFromMessage(payload);
         console.info('[WS:AGENT-TEXT]', { text: text?.slice(0, 200) });
         if (typeof text !== 'string') return;
+
+        // ── Sentinel suppression in agent stream (RTL-051) ──
+        if (isSentinelOutput(text)) {
+          console.warn('[RTL-051] Sentinel suppressed in agent event:', JSON.stringify(text));
+          return;
+        }
 
         // Same pattern as delta handler — ref mutation must be outside the updater.
         if (!streamingMessageIdRef.current) {
@@ -900,8 +955,9 @@ export function ClawdChatInterface() {
         deliver: false,
       },
     };
-    console.info('[OpenClaw] SEND chat.send →', JSON.stringify(frame));
-    console.info('[OpenClaw] SEND state: connectionState=%s handshakeComplete=%s', connectionState, handshakeComplete);
+    console.info('[RTL-051:SEND] chat.send payload:', JSON.stringify(frame));
+    console.info('[RTL-051:SEND] runClassification=user-chat, deliver=%s, sessionKey=%s, connectionState=%s, handshakeComplete=%s',
+      frame.params.deliver, frame.params.sessionKey, connectionState, handshakeComplete);
     send(frame);
 
     setDraft('');
