@@ -11,6 +11,16 @@ type ModelEntry = {
 
 const STORAGE_KEY = 'zuberi:selected-model';
 
+// ── RTL-057: Valid model catalog ────────────────────────────────────
+// Ollama model IDs in the current catalog. If localStorage contains a model
+// not in this set, it is stale and must be cleared on startup.
+const VALID_MODEL_IDS = new Set([
+  'gpt-oss:20b',
+  'qwen2.5-coder:14b',
+  'qwen3-vl:8b',
+]);
+const DEFAULT_MODEL = 'gpt-oss:20b';
+
 type ModelSelectorProps = {
   send: (msg: WebSocketMessage) => void;
   isConnected: boolean;
@@ -34,8 +44,19 @@ export function ModelSelector({ send, isConnected, sessionKey, models, onClearGp
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPos, setMenuPos] = useState<{ bottom: number; left: number }>({ bottom: 0, left: 0 });
   const [selectedModel, setSelectedModel] = useState<string>(() => {
-    return localStorage.getItem(STORAGE_KEY) || '';
+    const stored = localStorage.getItem(STORAGE_KEY);
+    // RTL-057: Validate stored model against current catalog
+    if (stored && VALID_MODEL_IDS.has(stored)) {
+      return stored;
+    }
+    // Stale or missing — clear and use default
+    if (stored) {
+      console.warn('[RTL-057] Stale model in localStorage:', stored, '→ clearing to', DEFAULT_MODEL);
+    }
+    localStorage.setItem(STORAGE_KEY, DEFAULT_MODEL);
+    return DEFAULT_MODEL;
   });
+  const initialSyncDone = useRef(false);
   const btnRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -48,10 +69,27 @@ export function ModelSelector({ send, isConnected, sessionKey, models, onClearGp
     if (matchesStored) {
       setSelectedModel(stored);
     } else {
+      // Fall back to first model in the live Ollama list
       setSelectedModel(models[0].id);
       localStorage.setItem(STORAGE_KEY, models[0].id);
     }
-  }, [models]);
+
+    // RTL-057: On first model list arrival, patch backend to sync modelOverride
+    if (!initialSyncDone.current && isConnected) {
+      initialSyncDone.current = true;
+      const modelToSync = matchesStored ? stored : models[0].id;
+      console.info('[RTL-057] Syncing backend modelOverride on startup:', modelToSync);
+      send({
+        type: 'req',
+        id: crypto.randomUUID(),
+        method: 'sessions.patch',
+        params: {
+          key: sessionKey,
+          model: modelToSync,
+        },
+      });
+    }
+  }, [models, isConnected, send, sessionKey]);
 
   const closeMenu = useCallback(() => setMenuOpen(false), []);
 
