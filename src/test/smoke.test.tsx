@@ -153,8 +153,8 @@ describe('ModelSelector', () => {
   it('renders with mock models and shows selected model', async () => {
     const { ModelSelector } = await import('@/components/chat/ModelSelector');
     const models = [
-      { id: 'qwen3:14b-fast', name: 'qwen3:14b-fast', parameterSize: '14.8B' },
-      { id: 'qwen3:14b', name: 'qwen3:14b', parameterSize: '14.8B' },
+      { id: 'gpt-oss:20b', name: 'gpt-oss:20b', parameterSize: '20B' },
+      { id: 'qwen2.5-coder:14b', name: 'qwen2.5-coder:14b', parameterSize: '14.8B' },
     ];
     render(
       <ModelSelector
@@ -165,7 +165,7 @@ describe('ModelSelector', () => {
       />,
     );
     // Button shows selected model name (first model auto-selected)
-    expect(screen.getByText(/qwen3:14b-fast/)).toBeInTheDocument();
+    expect(screen.getByText(/gpt-oss:20b/)).toBeInTheDocument();
   });
 
   it('shows dropdown items including Clear GPU when opened', async () => {
@@ -207,14 +207,14 @@ describe('GpuStatus', () => {
       ok: true,
       json: () =>
         Promise.resolve({
-          models: [{ name: 'qwen3:14b-fast', size_vram: 8_589_934_592 }],
+          models: [{ name: 'gpt-oss:20b', size_vram: 8_589_934_592 }],
         }),
     });
     const { GpuStatus } = await import('@/components/chat/GpuStatus');
     render(<GpuStatus />);
     // Wait for the poll to complete and state to update
     await vi.waitFor(() => {
-      expect(screen.getByText(/qwen3:14b-fast/)).toBeInTheDocument();
+      expect(screen.getByText(/gpt-oss:20b/)).toBeInTheDocument();
     });
     expect(screen.getByText(/8\.0 GB/)).toBeInTheDocument();
   });

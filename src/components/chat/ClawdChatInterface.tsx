@@ -11,9 +11,11 @@ import { CopyButton } from '@/components/chat/CopyButton';
 // GpuStatus removed from toolbar — component kept for future use
 import { ZuberiContextMenu } from '@/components/layout/ZuberiContextMenu';
 import { AttachButton, FileChips, type QueuedFile } from '@/components/chat/FileAttachments';
+import { ToolApprovalCard } from '@/components/chat/ToolApprovalCard';
+import { ContextMeter } from '@/components/chat/ContextMeter';
 import { ensureEnvironment } from '@/lib/ollama';
 import type { ContentBlock, ChatMessage } from '@/types/message';
-import type { ApprovalRecord, ApprovalStatus, PermissionMode } from '@/types/permissions';
+import type { ApprovalDecision, ApprovalRecord, ApprovalStatus, PermissionMode } from '@/types/permissions';
 import { PERMISSION_MODE_TO_EXEC_ASK } from '@/types/permissions';
 import { normalizeApprovalRequest, resolveApprovalDecision } from '@/lib/permissionPolicy';
 
@@ -215,6 +217,13 @@ export function ClawdChatInterface() {
   const approvalsRef = useRef<Map<string, ApprovalRecord>>(new Map());
   // Track approval timeout timers for cleanup
   const approvalTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  // Reactive state for approval cards that need UI (decision === 'ask')
+  const [pendingApprovals, setPendingApprovals] = useState<Map<string, ApprovalRecord>>(new Map());
+
+  // ── Context meter: token usage in the 131K context window ─────────
+  const [tokenCount, setTokenCount] = useState<number | null>(null);
+  // Track outstanding sessions.get RPC so we can match its response
+  const pendingSessionGetIdRef = useRef<string | null>(null);
 
   // ── New Conversation handler (shared between menu event and context menu) ──
   const handleNewConversation = useCallback(() => {
@@ -224,6 +233,15 @@ export function ClawdChatInterface() {
     activeRunIdRef.current = null;
     streamingMessageIdRef.current = null;
     pendingRequestIdsRef.current.clear();
+    // Clear all approval timers and state
+    for (const timer of approvalTimersRef.current.values()) {
+      clearTimeout(timer);
+    }
+    approvalTimersRef.current.clear();
+    approvalsRef.current.clear();
+    setPendingApprovals(new Map());
+    setTokenCount(null);
+    pendingSessionGetIdRef.current = null;
     console.info('[Zuberi] New conversation started');
   }, []);
 
@@ -350,6 +368,28 @@ export function ClawdChatInterface() {
           return;
         }
         sendRef.current(buildConnectRequest(token));
+        return;
+      }
+
+      // ── Handle sessions.get response (context meter token data) ────
+      if (
+        message.type === 'res' &&
+        typeof message.id === 'string' &&
+        message.id === pendingSessionGetIdRef.current
+      ) {
+        pendingSessionGetIdRef.current = null;
+        pendingRequestIdsRef.current.delete(message.id);
+        if (message.ok) {
+          const result = message.result as Record<string, unknown> | undefined;
+          if (result) {
+            // Look for totalTokens at the top level or inside a nested session object
+            const session = (result.session ?? result) as Record<string, unknown>;
+            const total = typeof session.totalTokens === 'number' ? session.totalTokens : null;
+            if (total !== null) {
+              setTokenCount(total);
+            }
+          }
+        }
         return;
       }
 
@@ -584,11 +624,24 @@ export function ClawdChatInterface() {
               if (existing && existing.status === 'pending') {
                 existing.status = 'expired';
                 console.warn(`[Zuberi] Approval expired: ${approvalId}`);
+                // Update reactive state so UI re-renders
+                setPendingApprovals(prev => {
+                  const next = new Map(prev);
+                  next.set(approvalId, { ...existing });
+                  return next;
+                });
               }
               approvalTimersRef.current.delete(approvalId);
             }, remaining);
             approvalTimersRef.current.set(approvalId, timer);
           }
+
+          // Add to reactive state for UI rendering
+          setPendingApprovals(prev => {
+            const next = new Map(prev);
+            next.set(approvalId, { ...record });
+            return next;
+          });
         }
 
         approvalsRef.current.set(approvalId, record);
@@ -618,6 +671,16 @@ export function ClawdChatInterface() {
             clearTimeout(timer);
             approvalTimersRef.current.delete(approvalId);
           }
+
+          // Update reactive state if this was a user-facing approval card
+          if (existing.decisionSource === 'user') {
+            setPendingApprovals(prev => {
+              const next = new Map(prev);
+              next.set(approvalId, { ...existing });
+              return next;
+            });
+          }
+
           console.info(`[Zuberi] Approval resolved ${approvalId}: ${resolvedDecision}`);
         }
         return;
@@ -755,6 +818,29 @@ export function ClawdChatInterface() {
     }
   }, [fetchModels]);
 
+  // ── Fetch session token usage for context meter ────────────────
+  const fetchSessionTokens = useCallback(() => {
+    if (!handshakeCompleteRef.current) return;
+    const reqId = crypto.randomUUID();
+    pendingSessionGetIdRef.current = reqId;
+    pendingRequestIdsRef.current.add(reqId);
+    sendRef.current({
+      type: 'req',
+      id: reqId,
+      method: 'sessions.get',
+      params: { sessionKey: SESSION_KEY },
+    });
+  }, []);
+
+  // Poll session tokens: on handshake + every 30s
+  useEffect(() => {
+    if (!handshakeComplete) return;
+    // Initial fetch
+    fetchSessionTokens();
+    const id = setInterval(fetchSessionTokens, 30_000);
+    return () => clearInterval(id);
+  }, [handshakeComplete, fetchSessionTokens]);
+
   // ── Permission mode change handler ────────────────────────────
   const handlePermissionModeChange = useCallback((newMode: PermissionMode) => {
     setPermissionMode(newMode);
@@ -776,6 +862,41 @@ export function ClawdChatInterface() {
     });
     console.info(`[Zuberi] Permission mode → ${newMode} (execAsk: ${execAsk})`);
   }, [send]);
+
+  // ── Approval decision handler (user clicks Allow/Deny on ToolApprovalCard) ──
+  const handleApprovalDecision = useCallback((id: string, decision: ApprovalDecision) => {
+    const existing = approvalsRef.current.get(id);
+    if (!existing || existing.status !== 'pending') return;
+
+    // Mark as resolving
+    existing.status = 'resolving';
+
+    // Send exec.approval.resolve RPC
+    const resolveId = crypto.randomUUID();
+    pendingRequestIdsRef.current.add(resolveId);
+    sendRef.current({
+      type: 'req',
+      id: resolveId,
+      method: 'exec.approval.resolve',
+      params: { id, decision },
+    });
+
+    // Clear the timeout timer
+    const timer = approvalTimersRef.current.get(id);
+    if (timer) {
+      clearTimeout(timer);
+      approvalTimersRef.current.delete(id);
+    }
+
+    // Update reactive state so card shows "Resolving…"
+    setPendingApprovals(prev => {
+      const next = new Map(prev);
+      next.set(id, { ...existing });
+      return next;
+    });
+
+    console.info(`[Zuberi] User decision for ${id}: ${decision}`);
+  }, []);
 
   // ── Auto-resize textarea: 1 line → max ~6 lines, then scroll ──
   useEffect(() => {
@@ -961,6 +1082,9 @@ export function ClawdChatInterface() {
       frame.params.deliver, frame.params.sessionKey, connectionState, handshakeComplete);
     send(frame);
 
+    // Refresh context meter after sending (slight delay for backend to update)
+    setTimeout(fetchSessionTokens, 2000);
+
     setDraft('');
     setQueuedFiles([]);
   };
@@ -1033,6 +1157,20 @@ export function ClawdChatInterface() {
               />
             </div>
           ))}
+
+          {/* ── Pending Approval Cards ── */}
+          {pendingApprovals.size > 0 &&
+            Array.from(pendingApprovals.values()).map((record) => (
+              <div
+                key={record.id}
+                style={{ alignSelf: 'flex-start', maxWidth: '85%' }}
+              >
+                <ToolApprovalCard
+                  record={record}
+                  onDecision={handleApprovalDecision}
+                />
+              </div>
+            ))}
         </div>
       </div>
 
@@ -1090,6 +1228,7 @@ export function ClawdChatInterface() {
             >
               <AttachButton onFiles={processFiles} />
               <ModeSelector mode={permissionMode} onModeChange={handlePermissionModeChange} />
+              <ContextMeter tokenCount={tokenCount} />
               <div className="ml-auto">
                 <ModelSelector
                   send={send}
