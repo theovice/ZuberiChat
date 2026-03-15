@@ -44,28 +44,65 @@ function isSentinelOutput(text: string | null | undefined): boolean {
   return false;
 }
 
+// ── Command signature dedup (Tier 2) ─────────────────────────────
+// The gateway generates a NEW UUID for every tool-call retry. UUID-only dedup
+// (approvalsRef) lets retries for the same command create multiple cards.
+// This module-level Map tracks pending command signatures so only ONE card
+// shows per unique command, regardless of how many UUIDs the gateway generates.
+const pendingCommandSignatures = new Map<string, { latestId: string; allIds: string[] }>();
+
+function computeCommandSignature(command: string, commandArgv: string[]): string {
+  return command + '\0' + commandArgv.join('\0');
+}
+
 type ModelEntry = { id: string; name: string; parameterSize?: string; family?: string };
 
-function buildConnectRequest(token: string): WebSocketMessage {
+// v1.0.20: Device identity for Ed25519 challenge-response handshake
+interface DeviceIdentity {
+  deviceId: string;
+  publicKey: string;
+  signature: string;
+  signedAt: number;
+  nonce: string;
+}
+
+function buildConnectRequest(token: string, device?: DeviceIdentity): WebSocketMessage {
+  const params: Record<string, unknown> = {
+    minProtocol: 3,
+    maxProtocol: 3,
+    client: {
+      id: 'openclaw-control-ui',
+      version: '1.0.22',
+      platform: 'Win32',
+      mode: 'webchat',
+    },
+    role: 'operator',
+    scopes: [
+      'operator.admin',
+      'operator.approvals',
+      'operator.pairing',
+      'operator.read',
+      'operator.write',
+    ],
+    caps: ['tool-events', 'structured-commands'],
+    auth: { token },
+    userAgent: navigator.userAgent,
+    locale: navigator.language,
+  };
+  if (device) {
+    params.device = {
+      id: device.deviceId,
+      publicKey: device.publicKey,
+      signature: device.signature,
+      signedAt: device.signedAt,
+      nonce: device.nonce,
+    };
+  }
   return {
     type: 'req',
     id: crypto.randomUUID(),
     method: 'connect',
-    params: {
-      minProtocol: 3,
-      maxProtocol: 3,
-      client: {
-        id: 'openclaw-control-ui',
-        displayName: 'Zuberi',
-        version: '0.1.0',
-        platform: 'windows',
-        mode: 'ui',
-      },
-      role: 'operator',
-      scopes: ['operator.admin', 'operator.approvals'],
-      caps: [],
-      auth: { token },
-    },
+    params,
   };
 }
 
@@ -189,6 +226,11 @@ export function ClawdChatInterface() {
   const handshakeCompleteRef = useRef(false);
   const gatewayTokenRef = useRef<string | null>(null);
   const sendRef = useRef<(msg: WebSocketMessage) => void>(() => {});
+  // v1.0.20: Challenge timeout for Ed25519 device identity handshake
+  const challengeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // v1.0.22: Connection generation counter — prevents stale sign_challenge
+  // callbacks from sending a connect RPC with an outdated nonce.
+  const connectionGenRef = useRef(0);
   // Track the active chat run for correlating streaming deltas
   const activeRunIdRef = useRef<string | null>(null);
   const streamingMessageIdRef = useRef<string | null>(null);
@@ -222,8 +264,36 @@ export function ClawdChatInterface() {
 
   // ── Context meter: token usage in the 131K context window ─────────
   const [tokenCount, setTokenCount] = useState<number | null>(null);
-  // Track outstanding sessions.get RPC so we can match its response
+  // Track outstanding sessions.resolve RPC so we can match its response
   const pendingSessionGetIdRef = useRef<string | null>(null);
+
+  // ── Auto-scroll & scroll-to-bottom button ────────────────────────
+  const messageListRef = useRef<HTMLDivElement | null>(null);
+  const bottomAnchorRef = useRef<HTMLDivElement | null>(null);
+  const userHasScrolledUpRef = useRef(false);
+  const [showScrollBtn, setShowScrollBtn] = useState(false);
+  const SCROLL_THRESHOLD = 200; // px from bottom to consider "at bottom"
+
+  /** Scroll the message container to the bottom. */
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'auto') => {
+    bottomAnchorRef.current?.scrollIntoView({ behavior });
+    userHasScrolledUpRef.current = false;
+    setShowScrollBtn(false);
+  }, []);
+
+  /** onScroll handler for the message list — detects user scroll-up. */
+  const handleMessageScroll = useCallback(() => {
+    const el = messageListRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    if (distanceFromBottom > SCROLL_THRESHOLD) {
+      userHasScrolledUpRef.current = true;
+      setShowScrollBtn(true);
+    } else {
+      userHasScrolledUpRef.current = false;
+      setShowScrollBtn(false);
+    }
+  }, []);
 
   // ── New Conversation handler (shared between menu event and context menu) ──
   const handleNewConversation = useCallback(() => {
@@ -239,6 +309,7 @@ export function ClawdChatInterface() {
     }
     approvalTimersRef.current.clear();
     approvalsRef.current.clear();
+    pendingCommandSignatures.clear();
     setPendingApprovals(new Map());
     setTokenCount(null);
     pendingSessionGetIdRef.current = null;
@@ -300,36 +371,43 @@ export function ClawdChatInterface() {
     };
   }, [handleNewConversation]);
 
-  // Build WebSocket URL with token query param for gateway auth
-  const wsUrl = useMemo(() => {
-    if (!gatewayToken) return 'ws://127.0.0.1:18789';
-    const url = `ws://127.0.0.1:18789?token=${encodeURIComponent(gatewayToken)}`;
-    // Log URL with redacted token (last 4 chars only)
-    const last4 = gatewayToken.slice(-4);
-    console.info(`[OpenClaw] WebSocket URL: ws://127.0.0.1:18789?token=...${last4}`);
-    return url;
-  }, [gatewayToken]);
-
-  // v2026.3.1+: when the URL contains ?token=, the gateway performs implicit
-  // connect on WebSocket upgrade.  Sending an explicit connect RPC after that
-  // is rejected ("connect is only valid as the first request").  Detect this
-  // and skip the explicit connect, marking handshake complete immediately.
-  const urlHasToken = wsUrl.includes('?token=');
+  // v1.0.20: Connect to BARE WebSocket URL.  Do NOT send connect RPC on
+  // ws.onopen — wait for the gateway's connect.challenge event, sign it
+  // with Ed25519 via the Rust backend, then send the connect RPC with a
+  // device identity object.  If no challenge arrives within 5 seconds
+  // (e.g. dangerouslyDisableDeviceAuth=true), fall back to sending the
+  // connect RPC without a device object.
+  const wsUrl = 'ws://127.0.0.1:18789';
 
   const { send, connectionState } = useWebSocket({
     autoConnect: gatewayToken !== null,
     url: wsUrl,
-    // Only send explicit connect when URL does NOT carry the token
-    onOpen: !urlHasToken && gatewayToken ? buildConnectRequest(gatewayToken) : undefined,
+    // v1.0.20: NO onOpen — connect RPC is sent after challenge or timeout
     onConnected: () => {
-      if (urlHasToken) {
-        // Implicit auth — handshake is already done on upgrade
-        handshakeCompleteRef.current = true;
-        setHandshakeComplete(true);
-        console.info('[OpenClaw] Gateway handshake complete (implicit token auth)');
-      } else {
-        handshakeCompleteRef.current = false;
-        setHandshakeComplete(false);
+      handshakeCompleteRef.current = false;
+      setHandshakeComplete(false);
+
+      // v1.0.22: Bump connection generation so stale sign_challenge
+      // callbacks from previous connections are discarded.
+      connectionGenRef.current += 1;
+
+      // Clear any previous challenge timeout
+      if (challengeTimeoutRef.current) {
+        clearTimeout(challengeTimeoutRef.current);
+        challengeTimeoutRef.current = null;
+      }
+
+      // Start 5-second fallback timer: if no connect.challenge arrives,
+      // send the connect RPC without a device identity object.
+      const token = gatewayTokenRef.current;
+      if (token) {
+        challengeTimeoutRef.current = setTimeout(() => {
+          challengeTimeoutRef.current = null;
+          if (!handshakeCompleteRef.current) {
+            console.warn('[OpenClaw] No connect.challenge received in 5s — sending connect without device identity');
+            sendRef.current(buildConnectRequest(token));
+          }
+        }, 5000);
       }
     },
     onMessage: (message) => {
@@ -348,7 +426,17 @@ export function ClawdChatInterface() {
         if (message.ok) {
           handshakeCompleteRef.current = true;
           setHandshakeComplete(true);
-          console.info('[OpenClaw] Gateway handshake complete (explicit connect)');
+          // v1.0.20: Log granted scopes from the connect response
+          const result = message.result as Record<string, unknown> | undefined;
+          const granted = result?.scopes ?? result?.grantedScopes;
+          if (Array.isArray(granted)) {
+            console.info('[OpenClaw] Gateway handshake complete — granted scopes:', granted.join(', '));
+            if (!granted.includes('operator.approvals')) {
+              console.warn('[OpenClaw] Approval scope not granted — cards will not appear');
+            }
+          } else {
+            console.info('[OpenClaw] Gateway handshake complete (explicit connect)');
+          }
         } else {
           console.error('[OpenClaw] Gateway handshake failed:', message.error);
           // Mark handshake as "done-but-failed" so subsequent res messages
@@ -360,18 +448,58 @@ export function ClawdChatInterface() {
         return;
       }
 
-      // ── Handle connect.challenge ─────────────────────────────────
+      // ── Handle connect.challenge (Ed25519 device identity) ──────
+      // v1.0.20: Sign the gateway nonce with the device keypair via Rust,
+      // then send the connect RPC with the full device identity object.
       if (message.type === 'event' && message.event === 'connect.challenge') {
+        // Cancel the fallback timeout — challenge arrived in time
+        if (challengeTimeoutRef.current) {
+          clearTimeout(challengeTimeoutRef.current);
+          challengeTimeoutRef.current = null;
+        }
+
         const token = gatewayTokenRef.current;
         if (!token) {
           console.error('[OpenClaw] Received challenge but no token loaded');
           return;
         }
-        sendRef.current(buildConnectRequest(token));
+
+        const payload = message.payload as Record<string, unknown> | undefined;
+        const nonce = (payload?.nonce ?? '') as string;
+        // v1.0.22: Capture connection generation at challenge receipt.
+        // If the connection cycles before sign_challenge completes,
+        // the callback must discard itself to avoid sending a stale nonce.
+        const gen = connectionGenRef.current;
+        console.info('[OpenClaw] connect.challenge received — signing nonce (gen=%d)', gen);
+
+        invoke<DeviceIdentity>('sign_challenge', {
+          nonce,
+          token,
+          clientId: 'openclaw-control-ui',
+          clientMode: 'webchat',
+          role: 'operator',
+          scopes: 'operator.admin,operator.approvals,operator.pairing,operator.read,operator.write',
+          platform: 'win32',
+        })
+          .then((deviceInfo) => {
+            if (connectionGenRef.current !== gen) {
+              console.warn('[OpenClaw] Discarding stale sign_challenge result (gen %d → %d)', gen, connectionGenRef.current);
+              return;
+            }
+            console.info('[OpenClaw] Challenge signed — deviceId=%s', deviceInfo.deviceId.slice(0, 16));
+            sendRef.current(buildConnectRequest(token, deviceInfo));
+          })
+          .catch((err) => {
+            if (connectionGenRef.current !== gen) return; // stale — silently discard
+            console.error('[OpenClaw] Failed to sign challenge:', err);
+            // Fall back to connect without device identity
+            console.warn('[OpenClaw] Falling back to connect without device identity');
+            sendRef.current(buildConnectRequest(token));
+          });
         return;
       }
 
-      // ── Handle sessions.get response (context meter token data) ────
+      // ── Handle sessions.resolve response (context meter token data) ──
       if (
         message.type === 'res' &&
         typeof message.id === 'string' &&
@@ -464,6 +592,10 @@ export function ClawdChatInterface() {
               entry.id === streamId ? { ...entry, content: text } : entry,
             );
           });
+          // Auto-scroll on streaming delta (instant, respects user scroll-up)
+          if (!userHasScrolledUpRef.current) {
+            requestAnimationFrame(() => scrollToBottom('auto'));
+          }
         } else if (state === 'final') {
           // Replace streaming message with final content if present
           const text = extractTextFromMessage(payload.message);
@@ -476,17 +608,28 @@ export function ClawdChatInterface() {
           if (isSentinelOutput(text)) {
             console.warn('[RTL-051] Sentinel suppressed in final:', JSON.stringify(text),
               '| runId:', payload.runId, '| streamingId:', streamingMessageIdRef.current);
-            // Remove the streaming placeholder if one was created
+            // Only remove streaming placeholder if it also contains sentinel content.
+            // If deltas already populated it with real text, keep it.
             if (streamingMessageIdRef.current) {
               const deadId = streamingMessageIdRef.current;
-              setMessages((current) => current.filter((entry) => entry.id !== deadId));
+              setMessages((current) => {
+                const existing = current.find((entry) => entry.id === deadId);
+                if (existing && isSentinelOutput(existing.content)) {
+                  return current.filter((entry) => entry.id !== deadId);
+                }
+                return current;
+              });
             }
+            // Do NOT clear streamingMessageIdRef — a subsequent real final
+            // should update the existing message slot, not create a duplicate.
             activeRunIdRef.current = null;
-            streamingMessageIdRef.current = null;
             return;
           }
 
           if (text && streamingMessageIdRef.current) {
+            // Branch A: update the existing streaming message in place.
+            // Keep streamingMessageIdRef pointing to this slot so a second
+            // final for the same turn updates it instead of appending a dup.
             const finalStreamId = streamingMessageIdRef.current;
             setMessages((current) =>
               current.map((entry) =>
@@ -494,19 +637,30 @@ export function ClawdChatInterface() {
               ),
             );
           } else if (text && !streamingMessageIdRef.current) {
-            // Non-streaming final (e.g. command responses)
+            // Branch B: no streaming ref — append a new message.
+            // Generate ID outside the updater (StrictMode-safe) and store
+            // it in streamingMessageIdRef so a second final updates this
+            // message instead of appending another duplicate.
+            const newMsgId = crypto.randomUUID();
+            streamingMessageIdRef.current = newMsgId;
             setMessages((current) => [
               ...current,
-              { id: crypto.randomUUID(), role: 'assistant', content: text, blocks },
+              { id: newMsgId, role: 'assistant', content: text, blocks },
             ]);
           }
 
-          // Only clear refs for real finals (has text or matches our active run).
-          // Heartbeat finals (no text, no matching runId) must not kill mid-stream state.
-          if (text || !payload.runId || payload.runId === activeRunIdRef.current) {
-            activeRunIdRef.current = null;
-            streamingMessageIdRef.current = null;
+          // Auto-scroll on final (respects user scroll-up)
+          if (!userHasScrolledUpRef.current) {
+            requestAnimationFrame(() => scrollToBottom('auto'));
           }
+
+          // Clear activeRunIdRef unconditionally — it serves correlation
+          // only and must not survive into the next turn.
+          // Do NOT clear streamingMessageIdRef here.  It now intentionally
+          // survives across multiple finals within the same turn so that
+          // subsequent finals update the same message slot.  The ref is
+          // cleared on new-conversation and new-user-message boundaries.
+          activeRunIdRef.current = null;
         } else if (state === 'error') {
           console.error('[WS:ERROR]', { errorMessage: payload.errorMessage, payload: JSON.stringify(payload).slice(0, 300) });
           const errText = payload.errorMessage ?? 'An error occurred';
@@ -542,7 +696,9 @@ export function ClawdChatInterface() {
           return;
         }
 
-        // Same pattern as delta handler — ref mutation must be outside the updater.
+        // Share streamingMessageIdRef with chat handler — agent and chat events
+        // for the same turn must converge on the same message slot.  Cross-turn
+        // contamination is prevented by clearing the ref on user-message submit.
         if (!streamingMessageIdRef.current) {
           streamingMessageIdRef.current = crypto.randomUUID();
         }
@@ -557,6 +713,10 @@ export function ClawdChatInterface() {
             entry.id === agentStreamId ? { ...entry, content: text } : entry,
           );
         });
+        // Auto-scroll on agent stream (respects user scroll-up)
+        if (!userHasScrolledUpRef.current) {
+          requestAnimationFrame(() => scrollToBottom('auto'));
+        }
         return;
       }
 
@@ -571,12 +731,42 @@ export function ClawdChatInterface() {
           return;
         }
 
-        // Deduplicate
+        // Deduplicate by UUID
         if (approvalsRef.current.has(approvalId)) return;
 
         const request = (payload.request ?? payload) as Record<string, unknown>;
         const normalized = normalizeApprovalRequest(request);
         const decision = resolveApprovalDecision(permissionModeRef.current, normalized);
+
+        // ── Tier 2: Command signature dedup ──
+        // The gateway issues a new UUID per retry.  Dedup by command signature
+        // so only ONE card renders per unique command.
+        const cmdArgv = normalized.args.length > 0
+          ? [normalized.command, ...normalized.args]
+          : [normalized.command];
+        const sig = computeCommandSignature(normalized.command, cmdArgv);
+        const existingSig = pendingCommandSignatures.get(sig);
+
+        if (existingSig) {
+          // Same command already pending — deny the PREVIOUS UUID so the
+          // gateway stops waiting on it, then update the signature to track
+          // the new (latest) UUID.
+          const prevId = existingSig.latestId;
+          const denyId = crypto.randomUUID();
+          pendingRequestIdsRef.current.add(denyId);
+          sendRef.current({
+            type: 'req',
+            id: denyId,
+            method: 'exec.approval.resolve',
+            params: { id: prevId, decision: 'deny' },
+          });
+          console.info(`[Zuberi] Signature dedup: denied stale UUID ${prevId}, replaced with ${approvalId}`);
+          existingSig.latestId = approvalId;
+          existingSig.allIds.push(approvalId);
+          // Store new UUID in approvalsRef so future UUID-dedup catches it
+          approvalsRef.current.set(approvalId, approvalsRef.current.get(prevId)!);
+          return;
+        }
 
         const now = Date.now();
         const expiresAtMs = typeof payload.expiresAt === 'number'
@@ -586,9 +776,7 @@ export function ClawdChatInterface() {
         const record: ApprovalRecord = {
           id: approvalId,
           command: normalized.command,
-          commandArgv: normalized.args.length > 0
-            ? [normalized.command, ...normalized.args]
-            : undefined,
+          commandArgv: cmdArgv.length > 1 ? cmdArgv : undefined,
           cwd: normalized.cwd,
           host: normalized.host,
           category: normalized.category,
@@ -609,10 +797,13 @@ export function ClawdChatInterface() {
             params: { id: approvalId, decision },
           });
           record.status = (decision === 'deny' ? 'auto_denied' : 'auto_approved') as ApprovalStatus;
-          console.info(`[Zuberi] Auto-resolved approval ${approvalId}: ${decision} (${normalized.category} → ${normalized.command})`);
+          console.info(`[Zuberi] Auto-resolved approval ${approvalId}: ${decision} (${normalized.category} -> ${normalized.command})`);
         } else {
           record.status = 'pending';
           console.info(`[Zuberi] Approval pending ${approvalId}: ${normalized.command} (${normalized.category})`);
+
+          // Register command signature for dedup
+          pendingCommandSignatures.set(sig, { latestId: approvalId, allIds: [approvalId] });
 
           // Set up timeout
           const remaining = expiresAtMs - now;
@@ -624,6 +815,17 @@ export function ClawdChatInterface() {
               if (existing && existing.status === 'pending') {
                 existing.status = 'expired';
                 console.warn(`[Zuberi] Approval expired: ${approvalId}`);
+                // Tier 3B: Notify the gateway so the agent doesn't hang
+                const expDenyId = crypto.randomUUID();
+                pendingRequestIdsRef.current.add(expDenyId);
+                sendRef.current({
+                  type: 'req',
+                  id: expDenyId,
+                  method: 'exec.approval.resolve',
+                  params: { id: approvalId, decision: 'deny' },
+                });
+                // Clean up signature entry
+                pendingCommandSignatures.delete(sig);
                 // Update reactive state so UI re-renders
                 setPendingApprovals(prev => {
                   const next = new Map(prev);
@@ -672,6 +874,14 @@ export function ClawdChatInterface() {
             approvalTimersRef.current.delete(approvalId);
           }
 
+          // Tier 2D: Clean up command signature entry
+          for (const [key, entry] of pendingCommandSignatures) {
+            if (entry.allIds.includes(approvalId) || entry.latestId === approvalId) {
+              pendingCommandSignatures.delete(key);
+              break;
+            }
+          }
+
           // Update reactive state if this was a user-facing approval card
           if (existing.decisionSource === 'user') {
             setPendingApprovals(prev => {
@@ -679,6 +889,16 @@ export function ClawdChatInterface() {
               next.set(approvalId, { ...existing });
               return next;
             });
+
+            // Tier 3C: Remove card after 2s visual feedback so user sees
+            // "Approved" / "Denied" briefly before it disappears.
+            setTimeout(() => {
+              setPendingApprovals(prev => {
+                const next = new Map(prev);
+                next.delete(approvalId);
+                return next;
+              });
+            }, 2000);
           }
 
           console.info(`[Zuberi] Approval resolved ${approvalId}: ${resolvedDecision}`);
@@ -827,8 +1047,8 @@ export function ClawdChatInterface() {
     sendRef.current({
       type: 'req',
       id: reqId,
-      method: 'sessions.get',
-      params: { sessionKey: SESSION_KEY },
+      method: 'sessions.resolve',
+      params: { key: SESSION_KEY },
     });
   }, []);
 
@@ -848,6 +1068,7 @@ export function ClawdChatInterface() {
     localStorage.setItem('zuberi-permission-mode', newMode);
 
     // Send sessions.patch to backend with mapped execAsk value
+    // Schema: { key (required), execAsk, ... } — flat, no nesting under "patch"
     const execAsk = PERMISSION_MODE_TO_EXEC_ASK[newMode];
     const patchId = crypto.randomUUID();
     pendingRequestIdsRef.current.add(patchId);
@@ -856,8 +1077,8 @@ export function ClawdChatInterface() {
       id: patchId,
       method: 'sessions.patch',
       params: {
-        sessionKey: SESSION_KEY,
-        patch: { execAsk },
+        key: SESSION_KEY,
+        execAsk,
       },
     });
     console.info(`[Zuberi] Permission mode → ${newMode} (execAsk: ${execAsk})`);
@@ -871,15 +1092,48 @@ export function ClawdChatInterface() {
     // Mark as resolving
     existing.status = 'resolving';
 
-    // Send exec.approval.resolve RPC
+    // Tier 2C: Resolve using the LATEST UUID from command signature, not
+    // necessarily the one on the card (gateway cares about the most recent).
+    let resolveTargetId = id;
+    let sigKey: string | null = null;
+    for (const [key, entry] of pendingCommandSignatures) {
+      if (entry.allIds.includes(id) || entry.latestId === id) {
+        resolveTargetId = entry.latestId;
+        sigKey = key;
+        break;
+      }
+    }
+
+    // Send exec.approval.resolve RPC for the latest UUID
     const resolveId = crypto.randomUUID();
     pendingRequestIdsRef.current.add(resolveId);
     sendRef.current({
       type: 'req',
       id: resolveId,
       method: 'exec.approval.resolve',
-      params: { id, decision },
+      params: { id: resolveTargetId, decision },
     });
+
+    // Deny ALL other stale UUIDs in the same signature group
+    if (sigKey) {
+      const entry = pendingCommandSignatures.get(sigKey);
+      if (entry) {
+        for (const staleId of entry.allIds) {
+          if (staleId !== resolveTargetId) {
+            const denyRpcId = crypto.randomUUID();
+            pendingRequestIdsRef.current.add(denyRpcId);
+            sendRef.current({
+              type: 'req',
+              id: denyRpcId,
+              method: 'exec.approval.resolve',
+              params: { id: staleId, decision: 'deny' },
+            });
+          }
+        }
+        // Remove signature entry
+        pendingCommandSignatures.delete(sigKey);
+      }
+    }
 
     // Clear the timeout timer
     const timer = approvalTimersRef.current.get(id);
@@ -888,14 +1142,19 @@ export function ClawdChatInterface() {
       approvalTimersRef.current.delete(id);
     }
 
-    // Update reactive state so card shows "Resolving…"
+    // Update reactive state so card shows "Resolving..."
     setPendingApprovals(prev => {
       const next = new Map(prev);
       next.set(id, { ...existing });
       return next;
     });
 
-    console.info(`[Zuberi] User decision for ${id}: ${decision}`);
+    // Tier 3A: The 15-second safety-net timer has been REMOVED.
+    // It caused users to double-click Allow when execution took >15s,
+    // creating unknown requestId errors.  The gateway has its own 120s
+    // timeout — trust it.
+
+    console.info(`[Zuberi] User decision for ${id}: ${decision} (resolveTarget: ${resolveTargetId})`);
   }, []);
 
   // ── Auto-resize textarea: 1 line → max ~6 lines, then scroll ──
@@ -1057,6 +1316,8 @@ export function ClawdChatInterface() {
     };
 
     setMessages((current) => [...current, userMessage]);
+    // ALWAYS scroll to bottom on user send (smooth)
+    requestAnimationFrame(() => scrollToBottom('smooth'));
 
     // Reset streaming state for the new response
     const runId = crypto.randomUUID();
@@ -1133,7 +1394,12 @@ export function ClawdChatInterface() {
       </ZuberiContextMenu>
 
       {/* ── Messages ── */}
-      <div className="ghost-messages flex-1 overflow-y-auto px-4" style={{ background: 'transparent' }}>
+      <div
+        ref={messageListRef}
+        onScroll={handleMessageScroll}
+        className="ghost-messages flex-1 overflow-y-auto px-4"
+        style={{ background: 'transparent', position: 'relative' }}
+      >
         <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
           {messages.map((message) => (
             <div
@@ -1171,7 +1437,44 @@ export function ClawdChatInterface() {
                 />
               </div>
             ))}
+
+          {/* Bottom anchor for auto-scroll */}
+          <div ref={bottomAnchorRef} aria-hidden="true" />
         </div>
+
+        {/* ── Scroll-to-bottom button ── */}
+        <button
+          type="button"
+          aria-label="Scroll to bottom"
+          onClick={() => scrollToBottom('smooth')}
+          style={{
+            position: 'sticky',
+            bottom: 12,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 36,
+            height: 36,
+            borderRadius: '50%',
+            border: 'none',
+            cursor: 'pointer',
+            background: 'rgba(var(--surface-2-rgb, 38, 36, 33), 0.85)',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+            color: 'var(--text-primary)',
+            opacity: showScrollBtn ? 1 : 0,
+            pointerEvents: showScrollBtn ? 'auto' : 'none',
+            transition: 'opacity 200ms ease',
+            zIndex: 10,
+            marginTop: -44,
+          }}
+        >
+          {/* Chevron-down SVG */}
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </button>
       </div>
 
       {/* ── Chat Input (Claude Code style) with drag-drop zone ── */}

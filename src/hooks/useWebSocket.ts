@@ -101,6 +101,8 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
   const mountedRef = useRef(true);
   /** True when user explicitly called disconnect() — suppresses auto-reconnect. */
   const intentionalDisconnectRef = useRef(false);
+  /** Queue for messages sent while WS is not OPEN — flushed on next onopen. */
+  const pendingQueueRef = useRef<string[]>([]);
 
   // Store callbacks in refs to avoid reconnecting on callback changes
   const onConnectedRef = useRef(onConnected);
@@ -179,6 +181,16 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
       if (onOpenRef.current) {
         ws.send(JSON.stringify(onOpenRef.current));
       }
+
+      // v1.0.22: Drop stale queued messages on reconnect.
+      // The gateway requires a connect handshake before any other RPC,
+      // so flushing queued messages immediately would fail with
+      // "first request must be connect".
+      const queued = pendingQueueRef.current;
+      if (queued.length > 0) {
+        console.warn(`[WebSocket] Dropping ${queued.length} stale queued message(s) — handshake required first`);
+        queued.length = 0;
+      }
     };
 
     ws.onmessage = (event) => {
@@ -256,8 +268,11 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(message));
     } else {
-      console.warn('[WebSocket] send() DROPPED — readyState=%s (ws=%s)',
-        wsRef.current?.readyState ?? 'null', wsRef.current ? 'exists' : 'null');
+      const raw = JSON.stringify(message);
+      pendingQueueRef.current.push(raw);
+      console.warn('[WebSocket] send() QUEUED — readyState=%s (ws=%s), queue=%d',
+        wsRef.current?.readyState ?? 'null', wsRef.current ? 'exists' : 'null',
+        pendingQueueRef.current.length);
     }
   }, []);
 

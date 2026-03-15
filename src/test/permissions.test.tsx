@@ -160,7 +160,12 @@ describe('resolveApprovalDecision', () => {
   describe('ask mode', () => {
     const mode: PermissionMode = 'ask';
 
-    it.each<ApprovalCategory>(['read', 'write', 'patch', 'destructive', 'exec', 'unknown'])(
+    // RTL-061: reads are auto-approved with allow-always in all modes except plan
+    it('auto-approves read with allow-always', () => {
+      expect(resolveApprovalDecision(mode, make('read'))).toBe('allow-always');
+    });
+
+    it.each<ApprovalCategory>(['write', 'patch', 'destructive', 'exec', 'unknown'])(
       'returns "ask" for %s category',
       (category) => {
         expect(resolveApprovalDecision(mode, make(category))).toBe('ask');
@@ -171,8 +176,13 @@ describe('resolveApprovalDecision', () => {
   describe('auto mode', () => {
     const mode: PermissionMode = 'auto';
 
-    it.each<ApprovalCategory>(['read', 'write', 'patch'])(
-      'auto-approves %s category',
+    // RTL-061: reads get allow-always (cached permanently by backend)
+    it('auto-approves read with allow-always', () => {
+      expect(resolveApprovalDecision(mode, make('read'))).toBe('allow-always');
+    });
+
+    it.each<ApprovalCategory>(['write', 'patch'])(
+      'auto-approves %s category with allow-once',
       (category) => {
         expect(resolveApprovalDecision(mode, make(category))).toBe('allow-once');
       },
@@ -200,8 +210,13 @@ describe('resolveApprovalDecision', () => {
   describe('bypass mode', () => {
     const mode: PermissionMode = 'bypass';
 
-    it.each<ApprovalCategory>(['read', 'write', 'patch', 'destructive', 'exec', 'unknown'])(
-      'allows %s category',
+    // RTL-061: reads get allow-always even in bypass (consistent with all non-plan modes)
+    it('auto-approves read with allow-always', () => {
+      expect(resolveApprovalDecision(mode, make('read'))).toBe('allow-always');
+    });
+
+    it.each<ApprovalCategory>(['write', 'patch', 'destructive', 'exec', 'unknown'])(
+      'allows %s category with allow-once',
       (category) => {
         expect(resolveApprovalDecision(mode, make(category))).toBe('allow-once');
       },

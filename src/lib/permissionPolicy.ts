@@ -91,14 +91,34 @@ export function resolveApprovalDecision(
   mode: PermissionMode,
   normalized: NormalizedApproval,
 ): ApprovalDecision | 'ask' {
+  // RTL-073: Commands routed through the CEG shell service (Dispatch at
+  // 100.100.101.1:3003) can be reads, writes, or destructive operations.
+  // The primary binary is "curl" but the *real* command runs on CEG, so
+  // classifyCommand sees "curl" → exec, which is correct.  However, when
+  // the gateway resolves the path to /usr/bin/curl and the approval comes
+  // back with the inner command (ls, cat, etc.), classifyCommand tags it
+  // as "read" and auto-approves.  Force "ask" for any command whose args
+  // reference the shell service so the user sees a card.
+  const fullArgs = normalized.args.join(' ');
+  if (fullArgs.includes('100.100.101.1:3003') || fullArgs.includes('3003/command')) {
+    return 'ask';
+  }
+
+  // RTL-061: Reads are always auto-approved with allow-always so the backend
+  // caches the pattern in exec-approvals.json.  After the first approval,
+  // subsequent reads skip the approval flow entirely (even across sessions).
+  // Only plan mode overrides this (plan blocks everything).
+  if (normalized.category === 'read' && mode !== 'plan') {
+    return 'allow-always';
+  }
+
   switch (mode) {
     case 'ask':
       return 'ask';
 
     case 'auto':
-      // Auto-approve safe operations; ask for destructive/exec/unknown
+      // Auto-approve safe write/patch operations; ask for destructive/exec/unknown
       if (
-        normalized.category === 'read' ||
         normalized.category === 'write' ||
         normalized.category === 'patch'
       ) {
